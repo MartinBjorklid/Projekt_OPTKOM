@@ -89,6 +89,20 @@ class BST:
         return 1 + max(self._height(r.left) , self._height(r.right)) #Om r inte är noll, kolla vilket av vänster och höger som är längst och returnera max höjden.
         
         pass
+        
+def get_binary(x: int) -> str:       #gör om talen till binär       
+    """ Ex3: Returns the binary representation of x """
+    if x<0:
+        return "-" + get_binary(-x) #Om det är ett negativt tall, gör det för det positiva
+    
+    if x==0:
+        return "0" #Om x är noll så blir det noll
+    if x==1:
+        return "1" #Om x är ett så blir det en etta
+    
+    return get_binary(x//2) + str(x%2) #Kör talet heltal delat på 2, skriv ut det som blir resten, en etta ellet nolla
+
+    pass
 
 
 
