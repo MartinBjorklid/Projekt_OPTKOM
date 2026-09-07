@@ -14,5 +14,5 @@ def to_bin(strin or smth):
 
 
 
-if __name__ == '__main_-':
+if __name__ == '__main__':
     readfile(filename=)
