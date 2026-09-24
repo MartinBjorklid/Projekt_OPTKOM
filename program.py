@@ -5,14 +5,17 @@ har kopierats till taemot.py. skicka.py/Signalbehandling.py behålls.
 import threading
 import time
 
-from skicka import send, step_time, Start_seq, Slut_seq
+from skicka import send_binary_list, step_time, Start_seq, Slut_seq
 from taemot import receive_continuous
-from Signalbehandling import huffman_decode, huffman_encode, codes, tree
+from Signalbehandling import huffman_decode, huffman_encode, encode, decode, codes, tree
 
 
 def main():
     text = input("Skriv ett meddelande: ").lower()
-    nyttobitar = huffman_encode(text, codes)
+    komprimerade_bitar = huffman_encode(text, codes)
+    kodade_bitar, H, padding = encode(komprimerade_bitar)
+    nyttobitar = kodade_bitar.tolist()
+    
     # Den befintliga slutsekvensen kan fortfarande förekomma INNE i andra meddelanden.
     for i in range(len(nyttobitar) - len(Slut_seq) + 1):
         if nyttobitar[i:i + len(Slut_seq)] == Slut_seq:
@@ -45,7 +48,7 @@ def main():
     # Liten viloperiod för att avkodaren ska hinna se signalnivån före start.
     time.sleep(0.2)
     print("\n[MAIN] Startar sändningen...")
-    send(text)
+    send_binary_list(Start_seq + nyttobitar + Slut_seq)
     trad.join(timeout=timeout_s + 3)
     if trad.is_alive():
         print("Mottagaren avslutades inte inom tidsgränsen.")
@@ -58,7 +61,8 @@ def main():
     if len(mottagna_bitar) != len(nyttobitar):
         print("VARNING: Fel antal nyttobitar. Kontrollera synkronisering eller falsk slutsekvens.")
     try:
-        avkodad = huffman_decode(mottagna_bitar, tree)
+        avkodade_bitar = decode(mottagna_bitar, H, padding)
+        avkodad = huffman_decode(avkodade_bitar, tree)
         print("Avkodad text:", avkodad)
         print("Stämmer med original:", avkodad == text)
     except Exception as exc:
