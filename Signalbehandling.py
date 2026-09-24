@@ -1,0 +1,206 @@
+import heapq
+from itertools import count
+
+# ============================================================
+# 1. Kod för optimering av text
+# ============================================================
+
+class HuffmanNode:
+    def __init__(self, frequency, char=None, left=None, right=None):
+        self.frequency = frequency
+        self.char = char
+        self.left = left
+        self.right = right
+
+    def is_leaf(self):
+        return self.char is not None
+
+
+def build_huffman_tree(frequencies):
+
+    heap = []
+    counter = count()
+
+    # Skapa en nod för varje tecken
+    for char, frequency in frequencies.items():
+        node = HuffmanNode(frequency, char)
+
+        heapq.heappush(
+            heap,
+            (frequency, next(counter), node)
+        )
+
+    # Slå ihop de två minst frekventa noderna
+    while len(heap) > 1:
+
+        frequency1, _, left = heapq.heappop(heap)
+        frequency2, _, right = heapq.heappop(heap)
+
+        parent = HuffmanNode(
+            frequency1 + frequency2,
+            left=left,
+            right=right
+        )
+
+        heapq.heappush(
+            heap,
+            (
+                parent.frequency,
+                next(counter),
+                parent
+            )
+        )
+
+    return heap[0][2]
+
+def create_huffman_codes(node, code=None, codes=None):
+
+    if codes is None:
+        codes = {}
+    if code is None:
+        code = []
+
+    # Vi har hittat ett tecken
+    if node.is_leaf():
+        codes[node.char] = code 
+        return codes
+
+    # Vänster = 0
+    create_huffman_codes(
+        node.left,
+        code + [0],
+        codes
+    )
+
+    # Höger = 1
+    create_huffman_codes(
+        node.right,
+        code + [1],
+        codes
+    )
+
+    return codes
+
+# ============================================================
+# 2. Kod för göra text till bit
+# ============================================================
+def huffman_encode(text, codes): 
+
+    result = []
+
+    for char in text:
+
+        if char not in codes:
+            raise ValueError(
+                f"Tecknet {repr(char)} finns inte i frekvenstabellen."
+            )
+
+        result += codes[char]
+
+    return [int(bit) for bit in result] ##ta bort list om en lång sträng
+
+
+# ============================================================
+# 3. Gör bits till text
+# ============================================================
+
+def huffman_decode(bits, tree):
+
+    result = []
+    node = tree
+
+    for bit in bits:
+
+        if bit == 0:
+            node = node.left
+
+        elif bit == 1:
+            node = node.right
+
+        else:
+            raise ValueError(
+                "Bitsträngen får endast innehålla 0 och 1."
+            )
+
+        # Vi har nått ett tecken
+        if node.is_leaf():
+
+            result.append(node.char)
+
+            # Börja om från roten
+            node = tree
+
+    # Om vi inte är tillbaka vid roten är bitsträngen
+    # ofullständig
+    if node != tree:
+        raise ValueError(
+            "Ofullständig Huffman-bitsträng."
+        )
+
+    return "".join(result)
+
+
+# ============================================================
+# 6. SVENSK FREKVENSTABELL
+# ============================================================
+
+frequencies = {
+
+    " ": 18.0,
+
+    "e": 12.0,
+    "a": 9.3,
+    "n": 8.5,
+    "r": 8.2,
+    "t": 7.5,
+    "s": 6.5,
+    "i": 6.2,
+    "l": 5.3,
+    "o": 5.1,
+    "d": 4.5,
+    "m": 3.4,
+    "k": 3.1,
+    "g": 3.0,
+    "v": 2.4,
+    "h": 2.1,
+    "u": 2.0,
+
+    "b": 1.3,
+    "c": 1.7,
+    "f": 1.8,
+    "p": 1.8,
+
+    "å": 1.3,
+    "ä": 1.8,
+    "ö": 1.0,
+
+    "j": 0.7,
+    "y": 0.7,
+
+    "q": 0.02,
+    "w": 0.02,
+    "x": 0.1,
+    "z": 0.1,
+    "!": 0.1,
+    "?": 0.1
+}
+
+
+tree = build_huffman_tree(frequencies)
+
+codes = create_huffman_codes(tree)
+
+
+# ============================================================
+# 8. VISA BIT-TABELLEN
+# ============================================================
+
+# print("BIT-TABELL")
+# print("-------------------------")
+
+# for char, code in sorted(
+#     codes.items(),
+#     key=lambda item: (len(item[1]), item[1])
+# ):
+#     print(repr(char), "->", code)
+
