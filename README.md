@@ -5,7 +5,7 @@
 
 ## Installation
 1. Installera python
-  Gå in på https://www.python.org/ och installera python
+  - Gå in på https://www.python.org/ och installera python
   
   >[!IMPORTANT]
   >Se till att klicka i att "Add python to PATH" under installationen, annars kommer saker inte att funka!
