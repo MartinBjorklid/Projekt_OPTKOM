@@ -3,6 +3,7 @@ import numpy as np
 import pandas as pd
 import threading
 import time
+import datetime as dt
 
 # STREAMLIT_CHUNK:Importerar backend-funktioner
 # Importerar de faktiska hårdvarufunktionerna från projektets stödfiler
@@ -26,13 +27,15 @@ with st.expander("🛠️ Debug-meny"):
     st.markdown("### Justera Hårdvarutider")
     col_t1, col_t2 = st.columns(2)
     with col_t1:
-        step_time_input = st.number_input("Step Time (s/bit)", min_value=0.01, max_value=2.0, value=0.10, step=0.01, format="%.2f")
+        step_time_input = st.number_input("Step Time (s/bit)", min_value=0.001, max_value=1.0, value=0.10, step=0.001, format="%.3f")
         # Beräkna och visa överföringshastigheten i bit/s
         sample_rate = 1.0 / step_time_input if step_time_input > 0 else 0
         st.info(f"Överföringshastighet: **{sample_rate:.2f} bit/s**")
     with col_t2:
         extra_time_input = st.number_input("Extra Time (s)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
-        simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False, help="Om aktiverad kommer ingen hårdvara att användas. Allt simuleras istället.")
+    
+    st.markdown("### Simulering")
+    simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False, help="Om aktiverad kommer ingen hårdvara att användas. Allt simuleras istället.")
     
     st.markdown("### Manuell Bitsändning")
     manual_bits = st.text_input("Skriv in egna bitar (0 och 1):", placeholder="T.ex. 10101100")
@@ -152,13 +155,12 @@ with col_tx:
                 "rx_bits": rx_bits,
                 "rx_text": rx_text
             }
-
-# STREAMLIT_CHUNK:Renderar grafer för sändare
-if st.session_state.history:
-        st.subheader("Skickade Bitar (inkl. start/stopp)")
-        st.code(st.session_state.history["tx_bits"])
-        st.subheader("Styrsignal till LC-cell (Volt)")
-        st.line_chart(st.session_state.history["tx_voltage"], color="#ff4b4b")
+    # STREAMLIT_CHUNK:Renderar grafer för sändare
+    if st.session_state.history:
+            st.subheader("Skickade Bitar (inkl. start/stopp)")
+            st.code(st.session_state.history["tx_bits"])
+            st.subheader("Styrsignal till LC-cell (Volt)")
+            st.line_chart(st.session_state.history["tx_voltage"], color="#ff4b4b")
 
 # STREAMLIT_CHUNK:Bygger mottagarsidan
 with col_rx:
@@ -193,9 +195,9 @@ with col_rx:
         )
         
         st.download_button(
-            label="📄 Spara meddelandelogg (TXT)",
+            label="📄 Spara meddelandelogg (.txt)",
             data=txt_log_content.encode('utf-8'),
-            file_name="meddelandelogg.txt",
+            file_name=f"meddelandelogg-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
             mime="text/plain",
             use_container_width=True
         )
