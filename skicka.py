@@ -8,11 +8,10 @@ sys.modules['nidaqmx.constants'] = MagicMock()
 import nidaqmx 
 
 import matplotlib.pyplot as plt
-from Signalbehandling import huffman_encode, codes,tree,huffman_decode
+from Signalbehandling import huffman_encode, codes, tree, huffman_decode
 
-Start_seq = [1,1,1,1,0,0]
-Slut_seq = [0,0,1,1,1,1]
-
+Start_seq = [1, 1, 1, 1, 0, 0]
+Slut_seq = [0, 0, 1, 1, 1, 1]
 
 def send_binary_list(values, step_time=0.1, extra_time=1.0, channel="Dev1/ao0"):
     """
@@ -91,7 +90,6 @@ def send_binary_list(values, step_time=0.1, extra_time=1.0, channel="Dev1/ao0"):
         linewidth=2
     )
     
-
     plt.xlabel("Tid [s]")
     plt.ylabel("Spänning [V]")
     plt.title("NI-DAQmx analog utgång")
@@ -113,15 +111,14 @@ def send_binary_list(values, step_time=0.1, extra_time=1.0, channel="Dev1/ao0"):
         label="5 V"
     )
 
-    plt.legend()
-    plt.tight_layout()
-    plt.show(block=False)
-    plt.pause(5)
-
+    # Vi stänger av matplotlib-fönstret så att Streamlit får sköta graferna ostört!
+    # plt.legend()
+    # plt.tight_layout()
+    # plt.show(block=False)
+    # plt.pause(5)
 
 def send(text):
-
-# Gör texten till små bokstäver
+    # Gör texten till små bokstäver
     text = text.lower()
 
     encoded = huffman_encode(text, codes)
@@ -137,26 +134,17 @@ def send(text):
     fullt_medelanda = Start_seq + encoded + Slut_seq
     print(fullt_medelanda)
     print()
-    print ("Antal bitar komprimerat")
+    print("Antal bitar komprimerat")
     print(len(encoded))
     print("Antal bitar att skicka:")
     print(len(fullt_medelanda))
 
     print() 
-    print("Antal bitar okomprimetat")
+    print("Antal bitar okomprimerat")
     print(len(text)*8)
     
     return send_binary_list(fullt_medelanda)
 
-
-
-
 if __name__ == "__main__":
     text = input("Skriv ett meddelande i main: ")
     send(text)
-    
-
-   
-
-
-
