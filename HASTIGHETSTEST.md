@@ -6,10 +6,10 @@ Kör på datorn som är ansluten till NI USB-6003. Python, numpy, nidaqmx och NI
 python hastighetstest.py
 ```
 
-Standardtestet kör 8, 6, 4, 3 och 2 ms per bit. Varje hastighet får 10 paket av vardera tre mönster: växlande bitar, 16-bitarsblock av nollor/ettor och reproducerbar slumpdata. Varje paket har 256 nyttobitar. Standard är AO0, AI0 (RSE) och tröskel 2,3 V. Räkna med cirka fem minuter plus uppstart och analys.
+Standardtestet kör 8, 6, 4, 3 och 2 ms per bit. Varje hastighet får 10 paket av vardera tre mönster: växlande bitar, 16-bitarsblock av nollor/ettor och reproducerbar slumpdata. Varje paket har 256 nyttobitar. Standard är AO0, AI0 (RSE) och tröskel 3,0 V. Räkna med cirka fem minuter plus uppstart och analys.
 
 ```sh
-python hastighetstest.py --bit-ms 4 3 2 --repeats 30 --threshold 2.3 --save-raw
+python hastighetstest.py --bit-ms 4 3 2 --repeats 30 --threshold 3.0 --save-raw
 ```
 
 Testet använder befintlig ±5/0 V-signalform med polaritet från bitpositionen. Det korrigerar INTE den tidigare identifierade obalansen för vissa bitmönster. Bekräfta att signalformen är lämplig för er LC-kristall före fysisk körning; kristallens tillåtna drivning har inte verifierats. AO återställs till 0 V efter varje försök, även vid undantag. Fel vid återställning visas och avbryter körningen.
