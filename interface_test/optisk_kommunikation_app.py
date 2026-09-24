@@ -12,10 +12,11 @@ class OpticalSystemSimulator:
         self.amplitude = amplitude 
 
     def text_to_bits(self, text):
+        """Omvandlar text till binär kod."""
         return ''.join(format(ord(c), '08b') for c in text)
 
     def bits_to_text(self, bits):
-        # Delar upp bitsträngen i grupper om 8 och konverterar tillbaka till tecken
+        """Delar upp bitsträngen i grupper om 8 och konverterar tillbaka till tecken."""
         chars = [chr(int(bits[i:i+8], 2)) for i in range(0, len(bits), 8) if len(bits[i:i+8]) == 8]
         return ''.join(chars)
 
@@ -23,7 +24,7 @@ class OpticalSystemSimulator:
         """Simulerar styrsignalen till LC-cellen."""
         signal = []
         for bit in bit_string:
-            # Bipolär signal: '1' -> +10V, '0' -> -10V
+            # Bipolär signal: '1' -> positiv amplitud, '0' -> negativ amplitud
             voltage = self.amplitude if bit == '1' else -self.amplitude
             # Skapar 10 mätpunkter per bit för att få en tydlig graf i realtid
             signal.extend([voltage] * 10) 
@@ -49,7 +50,7 @@ class OpticalSystemSimulator:
 # ==============================================================================
 st.set_page_config(page_title="Optisk Kommunikation", layout="wide")
 
-# Initiera system och state
+# Initiera system och state för att behålla data mellan interaktioner
 if 'hw' not in st.session_state:
     st.session_state.hw = OpticalSystemSimulator(amplitude=10.0)
 if 'history' not in st.session_state:
@@ -78,7 +79,7 @@ with col_tx:
                 rx_bits = hw.decode_voltage_to_bits(rx_voltage)
                 rx_text = hw.bits_to_text(rx_bits)
                 
-                # Spara till session state för rendering
+                # Spara till session state för rendering och fil-export
                 st.session_state.history = {
                     "original_text": message_input,
                     "tx_bits": tx_bits,
@@ -114,20 +115,41 @@ with col_rx:
         st.subheader("Fotodetektorns utsignal (Volt)")
         st.line_chart(data["rx_voltage"], color="#21c354")
         
-        # Möjlighet att lagra data på fil
+        # Möjlighet att lagra mätdata (spänningsnivåer) på fil som CSV
         export_df = pd.DataFrame({
             "Tidspunkt (simulerad)": range(len(data["tx_voltage"])),
             "LC_Spänning (V)": data["tx_voltage"],
             "Fotodetektor_Spänning (V)": data["rx_voltage"],
-            "Skickat Meddelande": message_input,
-            "Mottaget Meddelande": hw.text_to_bits(message_input)
         })
-        st.download_button(
-            label="💾 Spara mätdata till CSV",
-            data=export_df.to_csv(index=False).encode('utf-8'),
-            file_name="optisk_overforing_data.csv",
-            mime="text/csv",
-            use_container_width=True
+        
+        # Formatera datan för .txt-loggen enligt önskemål
+        txt_log_content = (
+            "--- LOGG FÖR OPTISK KOMMUNIKATION ---\n\n"
+            f"Skickat meddelande: {data['original_text']}\n"
+            f"Skickat meddelande konverterat till bits: {data['tx_bits']}\n"
+            f"Mottagna bits: {data['rx_bits']}\n"
+            f"Avkodat mottaget meddelande: {data['rx_text']}\n"
         )
+        
+        # Lägger nedladdningsknapparna bredvid varandra för snyggare layout
+        dl_col1, dl_col2 = st.columns(2)
+        
+        with dl_col1:
+            st.download_button(
+                label="💾 Spara mätdata (CSV)",
+                data=export_df.to_csv(index=False).encode('utf-8'),
+                file_name="optisk_overforing_data.csv",
+                mime="text/csv",
+                use_container_width=True
+            )
+            
+        with dl_col2:
+            st.download_button(
+                label="📄 Spara meddelandelogg (TXT)",
+                data=txt_log_content.encode('utf-8'),
+                file_name="meddelandelogg.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
     else:
         st.info("Väntar på inkommande signal...")
