@@ -32,7 +32,7 @@ with st.expander("🛠️ Debug-meny"):
         st.info(f"Överföringshastighet: **{sample_rate:.2f} bit/s**")
     with col_t2:
         extra_time_input = st.number_input("Extra Time (s)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
-        simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=True)
+        simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False, help="Om aktiverad kommer ingen hårdvara att användas. Allt simuleras istället.")
     
     st.markdown("### Manuell Bitsändning")
     manual_bits = st.text_input("Skriv in egna bitar (0 och 1):", placeholder="T.ex. 10101100")
