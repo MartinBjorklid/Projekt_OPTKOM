@@ -8,7 +8,7 @@
   - Gå in på https://www.python.org/ och installera python
   
   >[!IMPORTANT]
-  >Se till att klicka i att "Add python to PATH" under installationen, annars kommer saker inte att funka!
+  >Se till att klicka i "Add python to PATH" under installationen, annars kommer saker inte att funka!
   
 2. Installera följande python-paket med hjälp av pip
   * streamlit
