@@ -209,7 +209,7 @@ def spara_och_rita(signal, facit):
     plt.show()
 
 
-def main():
+def enstaka_felsokning():
     text = input("Text att skicka och felsöka: ").lower()
     # Använd exakt samma kodtabell och ram som er befintliga sändare.
     facit = np.asarray(Start_seq + huffman_encode(text, codes) + Slut_seq, dtype=int)
@@ -245,6 +245,154 @@ def main():
         raise RuntimeError("Inga sampel mottogs från AI0.")
     signal = np.concatenate(inspelning.block)
     spara_och_rita(signal, facit)
+
+
+def las_positivt_tal(prompt, heltal=False):
+    while True:
+        try:
+            value = int(input(prompt)) if heltal else float(input(prompt).replace(",", "."))
+            if value > 0 and np.isfinite(value):
+                return value
+        except ValueError:
+            pass
+        print("Ange ett positivt heltal." if heltal else "Ange ett positivt tal.")
+
+
+def kor_serietest(text, bittid, hamming):
+    from skicka import send_binary_list
+    from taemot import receive_continuous
+    from Signalbehandling import encode, decode, huffman_decode, tree
+
+    komprimerade = huffman_encode(text, codes)
+    if hamming:
+        kodade, H, padding = encode(komprimerade)
+        nyttobitar = kodade.tolist()
+    else:
+        nyttobitar = komprimerade
+    if any(nyttobitar[i:i + len(Slut_seq)] == Slut_seq
+           for i in range(len(nyttobitar) - len(Slut_seq) + 1)):
+        raise ValueError("Slutsekvensen finns i nyttodatan. Välj en annan text.")
+    ram = Start_seq + nyttobitar + Slut_seq
+    if len(nyttobitar) > 4096 or len(ram) * bittid > 180:
+        raise ValueError("Meddelandet är för långt för serietestet.")
+    if max(25, int(round(5000 * bittid))) / bittid > 100_000:
+        raise ValueError("Bittiden är för kort för mottagarens samplingsfrekvens.")
+
+    redo = threading.Event()
+    mottagna = []
+    mottagarfel = []
+    timeout_s = max(15.0, len(ram) * bittid + 6)
+
+    def lyssna():
+        try:
+            mottagna.extend(receive_continuous(
+                step_time=bittid, channel=AI_KANAL, threshold=TROSKEL,
+                timeout_s=timeout_s, ready_event=redo))
+        except Exception as exc:
+            mottagarfel.append(str(exc))
+            redo.set()
+
+    trad = threading.Thread(target=lyssna)
+    start = time.perf_counter()
+    trad.start()
+    fel = ""
+    # Sändaren ritar ett diagram per anrop. Stäng bara de nya figurerna.
+    tidigare_figurer = set(plt.get_fignums())
+    try:
+        if not redo.wait(timeout=5.0) or not trad.is_alive():
+            fel = "Mottagaren kunde inte startas. " + " ".join(mottagarfel)
+        else:
+            time.sleep(0.2)
+            send_binary_list(ram, step_time=bittid)
+    except Exception as exc:
+        fel = f"Sändningen misslyckades: {exc}"
+    finally:
+        trad.join(timeout=timeout_s + 3)
+        for nummer in set(plt.get_fignums()) - tidigare_figurer:
+            plt.close(nummer)
+    if trad.is_alive():
+        raise RuntimeError("Mottagaren avslutades inte. Avbryter serietestet.")
+    tid = time.perf_counter() - start
+    korrekt = False
+    if not fel:
+        try:
+            if mottagarfel:
+                raise RuntimeError(" ".join(mottagarfel))
+            if len(mottagna) != len(nyttobitar):
+                raise ValueError("Ingen fullständig ram eller fel antal nyttobitar.")
+            bitar = decode(mottagna, H, padding) if hamming else mottagna
+            korrekt = huffman_decode(bitar, tree) == text
+            if not korrekt:
+                fel = "Mottagen text skiljer sig från originalet."
+        except Exception as exc:
+            fel = str(exc)
+    return korrekt, tid, len(nyttobitar), len(mottagna), fel
+
+
+def serietest():
+    from pathlib import Path
+    from datetime import datetime
+
+    text = input("Text att upprepa vid varje inställning: ").lower()
+    if not text:
+        print("Texten får inte vara tom.")
+        return
+    huffman_encode(text, codes)
+    antal = las_positivt_tal("Antal meddelanden per inställning: ", heltal=True)
+    while True:
+        try:
+            bittider = [float(v.replace(",", ".")) / 1000
+                        for v in input("Bittider i ms, separerade med mellanslag (t.ex. 4 3 2,5): ").split()]
+            if bittider and all(np.isfinite(t) and t >= 0.00025 for t in bittider):
+                break
+        except ValueError:
+            pass
+        print("Ange minst en bittid, minst 0,25 ms.")
+    while True:
+        val = input("Hamming: 1 = utan, 2 = med, 3 = båda: ").strip()
+        if val in ("1", "2", "3"):
+            break
+        print("Välj 1, 2 eller 3.")
+    lagen = {"1": [False], "2": [True], "3": [False, True]}[val]
+    filnamn = Path("felsok_serie_" + datetime.now().strftime("%Y%m%d_%H%M%S_%f") + ".csv")
+    print(f"Tröskel: {TROSKEL:g} V. Resultat sparas i {filnamn}")
+    print("Tiden inkluderar uppstart, sändarens diagramvisning och eventuell timeout.")
+    print("Ingen automatisk omsändning. Samma text skickas i varje försök.")
+    with filnamn.open("x", newline="", encoding="utf-8") as fil:
+        writer = csv.writer(fil)
+        writer.writerow(["bittid_ms", "hamming", "troskel_V", "forsok", "korrekt",
+                         "tid_s", "sanda_nyttobitar", "mottagna_nyttobitar", "korrekta_tecken", "fel"])
+        for bittid in bittider:
+            for hamming in lagen:
+                lyckade = 0
+                totaltid = 0.0
+                print(f"\n--- {bittid * 1000:g} ms, Hamming {'på' if hamming else 'av'} ---")
+                for forsok in range(1, antal + 1):
+                    korrekt, tid, sanda, mottagna, fel = kor_serietest(text, bittid, hamming)
+                    lyckade += int(korrekt)
+                    totaltid += tid
+                    writer.writerow([bittid * 1000, int(hamming), TROSKEL, forsok,
+                                     int(korrekt), tid, sanda, mottagna,
+                                     len(text) if korrekt else 0, fel])
+                    fil.flush()
+                    print(f"{forsok}/{antal}: {'OK' if korrekt else fel} ({tid:.2f} s)")
+                print(f"Resultat: {lyckade}/{antal} korrekta ({100 * lyckade / antal:.1f} %), "
+                      f"{lyckade * len(text) / totaltid:.2f} korrekta tecken/s.")
+    print(f"\nSerietest klart. Resultat: {filnamn}")
+
+
+def main():
+    print("1. Befintlig felsökning: ett meddelande, analoga sampel och diagram")
+    print("2. Serietest: flera meddelanden per inställning")
+    while True:
+        val = input("Välj 1 eller 2 [1]: ").strip() or "1"
+        if val == "1":
+            enstaka_felsokning()
+            return
+        if val == "2":
+            serietest()
+            return
+        print("Välj 1 eller 2.")
 
 
 if __name__ == "__main__":
