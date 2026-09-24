@@ -1,84 +1,139 @@
-import sys
-from unittest.mock import MagicMock
+"""Mottagare med automatisk bitsynkronisering via startsekvensen.
 
-import matplotlib.pyplot as plt
+Ersätt innehållet i taemot.py med denna fil. Läser enbart Dev1/ai0
+(TIA-signalen), inte hårdvarukomparatorn. Kräver numpy och nidaqmx.
+"""
+
 import time
 
-from skicka import Start_seq, Slut_seq
-
+import numpy as np
 import nidaqmx
-import nidaqmx.constants
-from nidaqmx.constants import AcquisitionType
+from nidaqmx.constants import AcquisitionType, TerminalConfiguration
+
+from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
 
 
-def receive_continuous(step_time=0.1, channel="Dev1/ai0", threshold=1.5):
-    oversample_factor = 10
-    sample_rate = (1.0 / step_time) * oversample_factor
-    samples_per_bit = int(sample_rate * step_time)
+class SynkadBitavkodare:
+    """Tar emot en ström av AI-sampel och avläser bitar i deras mitt."""
 
-    print("Mottagaren är igång och väntar på startsekvens...")
+    def __init__(self, sampel_per_bit, threshold=2.3, max_payload_bits=4096):
+        self.n = int(sampel_per_bit)
+        if self.n < 12:
+            raise ValueError("För få AI-sampel per bit; öka AI-samplingsfrekvensen.")
+        self.threshold = float(threshold)
+        self.max_payload_bits = int(max_payload_bits)
+        self.data = []
+        self.sok_index = 1
+        self.start_index = None
+        self.nasta_bit = len(Start_seq)
+        self.payload = []
+        self.klar = False
 
-    bit_buffer = []
-    payload = []
-    recording = False
+    def _bit(self, start_index, bitnummer):
+        # Använd BARA mitten-tredjedelen av biten; undvik båda flankerna.
+        a = start_index + bitnummer * self.n + self.n // 3
+        b = start_index + bitnummer * self.n + 2 * self.n // 3
+        return int(np.median(self.data[a:b]) >= self.threshold)
+
+    def mata_in(self, sampel):
+        if self.klar:
+            return
+        self.data.extend(sampel)
+        startlangd = len(Start_seq) * self.n
+
+        if self.start_index is None:
+            # Identifiera första stigande flanken efter vilonivå.
+            # Prova kandidater först när HELA startsekvensen finns i bufferten.
+            while self.sok_index + startlangd <= len(self.data):
+                i = self.sok_index
+                self.sok_index += 1
+                if not (self.data[i - 1] < self.threshold <= self.data[i]):
+                    continue
+                # Kräv en låg nivå före den första ettan i startsekvensen.
+                if i >= self.n and np.median(self.data[i-self.n:i]) >= self.threshold:
+                    continue
+                if [self._bit(i, j) for j in range(len(Start_seq))] == Start_seq:
+                    self.start_index = i
+                    print(f"Startsekvens bekräftad vid AI-sampel {i}. "
+                          "Synkroniserar till bitarnas mittpunkter.")
+                    break
+
+        if self.start_index is None:
+            return
+
+        # Läs varje efterföljande bit relativt den upptäckta startflanken.
+        # Hela biten ska finnas i bufferten innan den avläses.
+        while self.start_index + (self.nasta_bit + 1) * self.n <= len(self.data):
+            bit = self._bit(self.start_index, self.nasta_bit)
+            self.nasta_bit += 1
+            self.payload.append(bit)
+
+            if len(self.payload) >= len(Slut_seq) and self.payload[-len(Slut_seq):] == Slut_seq:
+                self.payload = self.payload[:-len(Slut_seq)]
+                self.klar = True
+                return
+
+            if len(self.payload) > self.max_payload_bits + len(Slut_seq):
+                raise RuntimeError("Meddelandet överskred max_payload_bits utan slutsekvens.")
+
+
+def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
+                       threshold=2.3, timeout_s=15.0, ready_event=None):
+    """Returnera nyttobitar eller [] vid timeout. Samplar med DAQ:ens hårdvaruklocka.
+
+    ready_event kan användas av program.py så att sändning sker först efter
+    att DAQ-mottagningen faktiskt startat.
+    """
+    if step_time <= 0:
+        raise ValueError("step_time måste vara positiv.")
+    # Minst 25 sampel/bit, utan att överstiga 100 kS/s för en AI-kanal.
+    sampel_per_bit = max(25, int(round(5000 * step_time)))
+    sample_rate = sampel_per_bit / step_time
+    if sample_rate > 100_000:
+        raise ValueError("För kort bittid för denna DAQ och vald översampling.")
+
+    avkodare = SynkadBitavkodare(sampel_per_bit, threshold)
+    deadline = time.monotonic() + timeout_s
+    print(f"Lyssnar på {channel}: {sample_rate:.0f} sampel/s, "
+          f"{sampel_per_bit} sampel/bit, tröskel {threshold:g} V.")
 
     try:
         with nidaqmx.Task() as task:
             task.ai_channels.add_ai_voltage_chan(
-                channel, min_val=0.0, max_val=5.0
+                channel, terminal_config=TerminalConfiguration.RSE,
+                min_val=-10.0, max_val=10.0,
             )
-            
-            # Sätt kortet i kontinuerligt läge (lyssnar tills vi säger stopp)
             task.timing.cfg_samp_clk_timing(
                 rate=sample_rate,
-                sample_mode=AcquisitionType.CONTINUOUS
+                sample_mode=AcquisitionType.CONTINUOUS,
+                samps_per_chan=int(sample_rate * 2),
             )
+            task.in_stream.input_buf_size = int(sample_rate * 10)
+            task.start()
+            if ready_event is not None:
+                ready_event.set()
 
-            # Loopa i oändlighet (tills vi avbryter med 'break')
-            while True:
-                # Läs exakt 0.1 sekunders data
-                chunk = task.read(number_of_samples_per_channel=samples_per_bit)
-                avg_voltage = sum(chunk) / len(chunk)
-                
-                # Tolka som 1 eller 0
-                bit = 1 if avg_voltage >= threshold else 0
+            while time.monotonic() < deadline:
+                block = task.read(
+                    number_of_samples_per_channel=max(sampel_per_bit, int(sample_rate * 0.02)),
+                    timeout=2.0,
+                )
+                avkodare.mata_in(block)
+                if avkodare.klar:
+                    print(f"Slutsekvens mottagen. {len(avkodare.payload)} nyttobitar.")
+                    return avkodare.payload
 
-                if not recording:
-                    bit_buffer.append(bit)
-                    # Håll bufferten lika lång som startsekvensen för att spara minne
-                    if len(bit_buffer) > len(Start_seq):
-                        bit_buffer.pop(0)
-
-                    # Känner vi igen startmönstret?
-                    if bit_buffer == Start_seq:
-                        print("Startsekvens upptäckt! Spelar in meddelande...")
-                        recording = True
-                        payload = [] # Börja spela in
-                
-                else:
-                    payload.append(bit)
-                    
-                    # Kolla de sista bitarna i payloaden om de matchar STOP_SEQ
-                    if len(payload) >= len(Slut_seq):
-                        if payload[-len(Slut_seq):] == Slut_seq:
-                            print("Slutsekvens upptäckt! Stänger av lyssningen.")
-                            
-                            # Klipp bort STOP_SEQ från själva meddelandet
-                            final_data = payload[:-len(Slut_seq)]
-                            return final_data
-                            
-    except Exception as e:
-        print(f"Ett DAQ-fel uppstod: {e}")
+    except Exception as exc:
+        print(f"Mottagarfel: {exc}")
         return []
+    finally:
+        # Väck huvudprogrammet även om NI-task inte kunde startas.
+        if ready_event is not None:
+            ready_event.set()
+
+    print("Timeout: ingen fullständig ram mottagen.")
+    return []
+
 
 if __name__ == "__main__":
-    # Exempel: Lyssna i 5 sekunder med samma step_time som sändaren
-    received_bits = receive_continuous()
-    
-    print("\nMottagen binär lista:")
-    print(received_bits)
-    print(f"Antal mottagna bitar: {len(received_bits)}")
-    
-    
-    # Här kan du sedan skicka in received_bits till din avkodare:
-   
+    print("Mottagna nyttobitar:", receive_continuous())

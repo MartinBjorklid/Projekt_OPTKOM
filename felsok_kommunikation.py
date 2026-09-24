@@ -17,14 +17,14 @@ import nidaqmx
 import numpy as np
 from nidaqmx.constants import AcquisitionType, TerminalConfiguration
 
-from skicka import Start_seq, Slut_seq, send
+from skicka import Start_seq, Slut_seq, send, step_time
 from Signalbehandling import codes, huffman_encode
 
 
 # Samma bittid och tröskel som er nuvarande program.py / taemot.py.
-BITTID = 0.1              # s per bit
+BITTID = step_time              # s per bit
 AI_FREKVENS = 1000        # Hz; fler sampel än i ordinarie mottagare
-TROSKEL = 1.5             # V: 1 om AI0 >= TROSKEL
+TROSKEL = 3.0             # V: 1 om AI0 >= TROSKEL
 AI_KANAL = "Dev1/ai0"     # INTE komparatorns AI1
 START_FORSENING = 0.5     # s: samla baslinje före sändning
 EFTERTID = 0.3            # s: samla data efter sändning

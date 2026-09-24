@@ -1,20 +1,21 @@
 import sys
-from unittest.mock import MagicMock
+#from unittest.mock import MagicMock
 
 # Lura systemet att nidaqmx och dess konstanter är installerade
-sys.modules['nidaqmx'] = MagicMock()
-sys.modules['nidaqmx.constants'] = MagicMock()
+#sys.modules['nidaqmx'] = MagicMock()
+#sys.modules['nidaqmx.constants'] = MagicMock()
 
 import nidaqmx 
-
+import nidaqmx.constants
+from nidaqmx.constants import AcquisitionType
 import matplotlib.pyplot as plt
 from Signalbehandling import huffman_encode, codes,tree,huffman_decode
 
 Start_seq = [1,1,1,1,0,0]
-Slut_seq = [0,0,1,1,1,1]
+Slut_seq = [1,0,1,1,1,0,0,1,1,0,1,1,1]
+step_time = 0.004
 
-
-def send_binary_list(values, step_time=0.1, extra_time=1.0, channel="Dev1/ao0"):
+def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0"):
     """
     Skickar en lista med 0/1 till NI USB-6003 med HÅRDVARUKLOCKA.
     """
@@ -116,7 +117,7 @@ def send_binary_list(values, step_time=0.1, extra_time=1.0, channel="Dev1/ao0"):
     plt.legend()
     plt.tight_layout()
     plt.show(block=False)
-    plt.pause(5)
+    plt.pause(2)
 
 
 def send(text):
