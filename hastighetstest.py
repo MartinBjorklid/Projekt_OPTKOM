@@ -115,7 +115,7 @@ def main():
     p.add_argument('--bit-ms', nargs='+', type=float, default=[8, 6, 4, 3, 2])
     p.add_argument('--repeats', type=int, default=10)
     p.add_argument('--bits', type=int, default=256)
-    p.add_argument('--threshold', type=float, default=2.3)
+    p.add_argument('--threshold', type=float, default=3.0)
     p.add_argument('--sample-rate', type=int, default=20000)
     p.add_argument('--idle', type=float, default=.2)
     p.add_argument('--seed', type=int, default=2026)
