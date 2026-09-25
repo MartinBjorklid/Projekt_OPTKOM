@@ -1,10 +1,4 @@
 import sys
-from unittest.mock import MagicMock
-
-# Lura systemet att nidaqmx och dess konstanter är installerade
-sys.modules['nidaqmx'] = MagicMock()
-sys.modules['nidaqmx.constants'] = MagicMock()
-
 import nidaqmx 
 import nidaqmx.constants
 from nidaqmx.constants import AcquisitionType
@@ -61,10 +55,6 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
                 safety_task.write(0.0)
         except Exception:
             pass
-
-    # Matplotlib blockeras för att fungera med Streamlit!
-    # plt.show(block=False)
-    # plt.pause(2)
 
 def send(text):
     text = text.lower()

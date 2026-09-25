@@ -1,9 +1,3 @@
-import sys
-from unittest.mock import MagicMock
-
-sys.modules['nidaqmx'] = MagicMock()
-sys.modules['nidaqmx.constants'] = MagicMock()
-
 import time
 import numpy as np
 import nidaqmx
