@@ -10,7 +10,7 @@ import datetime as dt
 # ==============================================================================
 from skicka import send_binary_list, Start_seq, Slut_seq
 from taemot import receive_continuous
-from Signalbehandling import huffman_encode, huffman_decode, tree, codes
+from Signalbehandling import huffman_encode, huffman_decode, tree, codes, encode, decode
 
 # ==============================================================================
 # ANVÄNDARGRÄNSSNITT (STREAMLIT)
@@ -23,22 +23,19 @@ st.set_page_config(page_title="Optisk Kommunikation", layout="wide")
 if 'history' not in st.session_state:
     st.session_state.history = None
 
-# Initiera default-värden för tidsinställningar
 if 'step_time_val' not in st.session_state:
-    st.session_state.step_time_val = 0.100
+    st.session_state.step_time_val = 0.004
 
 if 'sample_rate_val' not in st.session_state:
-    st.session_state.sample_rate_val = 10.0
+    st.session_state.sample_rate_val = 250.0
 
 def update_sample_rate():
-    """Beräknar hastighet (bit/s) när step_time ändras."""
     if st.session_state.step_time_val > 0:
         st.session_state.sample_rate_val = 1.0 / st.session_state.step_time_val
     else:
         st.session_state.sample_rate_val = 0.0
 
 def update_step_time():
-    """Beräknar step_time (s/bit) när hastigheten ändras."""
     if st.session_state.sample_rate_val > 0:
         st.session_state.step_time_val = 1.0 / st.session_state.sample_rate_val
     else:
@@ -55,7 +52,6 @@ with st.expander("🛠️ Debug-meny"):
     col_t1, col_t2 = st.columns(2)
     
     with col_t1:
-        # Båda dessa fält är nu direkt kopplade till varandra!
         st.number_input(
             "Step Time (s/bit)", 
             min_value=0.000001, max_value=2.0, step=0.001, format="%.5f", 
@@ -71,14 +67,14 @@ with st.expander("🛠️ Debug-meny"):
         
     with col_t2:
         extra_time_input = st.number_input("Extra Time (s)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
-    st.markdown("### Simulering")    
-    simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False, help="Om aktiverad kommer ingen hårdvara att användas. Allt simuleras istället.")
+    
+    st.markdown("### Simulering")
+    simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False)
     
     st.markdown("### Manuell Bitsändning")
     manual_bits = st.text_input("Skriv in egna bitar (0 och 1):", placeholder="T.ex. 10101100")
     manual_send = st.button("Skicka Manuella Bitar", use_container_width=True)
 
-# Läs av den synkroniserade tiden till en lättanvänd lokal variabel
 step_time_input = st.session_state.step_time_val
 
 col_tx, col_rx = st.columns(2)
@@ -92,22 +88,34 @@ with col_tx:
     message_input = st.text_input("Mata in meddelande att skicka:", placeholder="Skriv ditt ord här...")
     normal_send = st.button("Skicka Data", use_container_width=True)
     
-    # Logik för att hantera båda sändningssätten
     trigger_send = False
     is_manual = False
     tx_bits_full = []
+    nyttobitar = []
     original_text = ""
+    H = None
+    padding = 0
     
     if normal_send and message_input:
         trigger_send = True
         original_text = message_input.lower()
         
-        # Huffman-koda meddelandet
         try:
-            encoded_bits = huffman_encode(original_text, codes)
-            tx_bits_full = Start_seq + encoded_bits + Slut_seq
+            # 1. Huffman-kodning och felkorrigering
+            komprimerade_bitar = huffman_encode(original_text, codes)
+            kodade_bitar, H, padding = encode(komprimerade_bitar)
+            nyttobitar = kodade_bitar.tolist()
+            
+            # 2. Varning om slutsekvens finns i nyttodatan (Från main)
+            for i in range(len(nyttobitar) - len(Slut_seq) + 1):
+                if nyttobitar[i:i + len(Slut_seq)] == Slut_seq:
+                    st.warning("Slutsekvensen förekommer i nyttodatan. Välj annat meddelande.")
+                    st.stop()
+                    
+            tx_bits_full = Start_seq + nyttobitar + Slut_seq
+            
         except Exception as e:
-            st.error(f"Kunde inte koda texten. Finns tecknen i tabellen? Fel: {e}")
+            st.error(f"Kunde inte koda texten. Fel: {e}")
             st.stop()
             
     elif manual_send and manual_bits:
@@ -115,13 +123,12 @@ with col_tx:
         is_manual = True
         original_text = "[Manuell bitsändning]"
         
-        # Extrahera endast giltiga ettor och nollor
         clean_bits = [int(b) for b in manual_bits if b in ('0', '1')]
         if not clean_bits:
             st.error("Du måste ange giltiga bitar (endast 0 och 1).")
             st.stop()
             
-        # Lägg till Start och Stopp sekvens så att mottagaren faktiskt triggas
+        nyttobitar = clean_bits
         tx_bits_full = Start_seq + clean_bits + Slut_seq
         
     elif normal_send and not message_input:
@@ -130,41 +137,45 @@ with col_tx:
     if trigger_send:
         with st.spinner("Modulerar och sänder signal..."):
             
-            # 2. Starta mottagaren i bakgrunden (Tråd) ELLER simulera
             motagna_resultat = []
+            redo = threading.Event()
+            timeout_s = max(15.0, (len(tx_bits_full)) * step_time_input + 6.0)
             
             if simulate_hw:
                 # --- SIMULERINGSLÄGE ---
-                time.sleep(0.5) # Simulerad uppstart
-                
-                # Simulera fördröjningen
+                time.sleep(0.5) 
                 simulated_transfer_time = len(tx_bits_full) * step_time_input
                 time.sleep(simulated_transfer_time)
                 
-                # Plocka bort start- och slutsekvensen
                 simulated_payload = tx_bits_full[len(Start_seq):-len(Slut_seq)]
                 motagna_resultat.append(simulated_payload)
-                
                 st.toast("Simulerad överföring klar!", icon="🤖")
                 
             else:
-                # --- RIKTIG HÅRDVARA ---
+                # --- RIKTIG HÅRDVARA (MAIN-TRÅDNING) ---
                 def lyssna_i_bakgrunden():
-                    res = receive_continuous(step_time=step_time_input, channel="Dev1/ai0", threshold=1.5)
+                    res = receive_continuous(
+                        step_time=step_time_input, channel="Dev1/ai0", 
+                        threshold=2.3, timeout_s=timeout_s, ready_event=redo
+                    )
                     motagna_resultat.append(res)
 
                 mottagar_trad = threading.Thread(target=lyssna_i_bakgrunden)
                 mottagar_trad.start()
                 
-                time.sleep(0.5) # Ge DAQ-mottagaren tid att vakna
+                if not redo.wait(timeout=5.0):
+                    st.error("Mottagaren kunde inte startas.")
+                    mottagar_trad.join(timeout=timeout_s + 3)
+                    st.stop()
                 
-                # Skicka signal via hårdvaran
+                time.sleep(0.2) # Viloperiod före sändning
+                
                 try:
                     send_binary_list(tx_bits_full, step_time=step_time_input, extra_time=extra_time_input, channel="Dev1/ao0")
                 except Exception as e:
                     st.error(f"DAQ-fel (Sändare): {e}")
                 
-                mottagar_trad.join()
+                mottagar_trad.join(timeout=timeout_s + 3)
             
             # Avkoda mottagen signal
             rx_bits = motagna_resultat[0] if motagna_resultat else []
@@ -173,13 +184,17 @@ with col_tx:
                     rx_text = "[Manuell sändning - Avkodning inaktiverad]"
                 else:
                     try:
-                        rx_text = huffman_decode(rx_bits, tree)
+                        if len(rx_bits) != len(nyttobitar):
+                            st.warning("Fel antal nyttobitar. Kontrollera synkronisering.")
+                            
+                        avkodade_bitar = decode(rx_bits, H, padding)
+                        rx_text = huffman_decode(avkodade_bitar, tree)
                     except Exception as e:
                         rx_text = f"Något blev fel vid avkodning: {e}"
             else:
-                rx_text = "[Ingen data mottogs. Fick mottagaren ljus på sig?]"
+                rx_text = "[Ingen data mottogs]"
             
-            # Skapa fyrkantsvåg för SÄNDAREN (Bipolär alternerande)
+            # Skapa graf Sändare
             tx_times = []
             tx_volts = []
             for i, val in enumerate(tx_bits_full):
@@ -188,10 +203,9 @@ with col_tx:
                 v = val * 5.0 * ((-1) ** i)
                 tx_times.extend([t_start, t_end])
                 tx_volts.extend([v, v])
-            
             tx_df = pd.DataFrame({"Tid (s)": tx_times, "Spänning (V)": tx_volts}).set_index("Tid (s)")
             
-            # Skapa fyrkantsvåg för MOTTAGAREN (Unipolär 5V idealiserad)
+            # Skapa graf Mottagare
             rx_times = []
             rx_volts = []
             for i, val in enumerate(rx_bits):
@@ -200,10 +214,9 @@ with col_tx:
                 v = val * 5.0
                 rx_times.extend([t_start, t_end])
                 rx_volts.extend([v, v])
-            
             rx_df = pd.DataFrame({"Tid (s)": rx_times, "Spänning (V)": rx_volts}).set_index("Tid (s)") if rx_bits else None
             
-            # Spara insamlad data till session state
+            # Spara state
             st.session_state.history = {
                 "original_text": original_text,
                 "tx_bits": tx_bits_full,
@@ -213,7 +226,6 @@ with col_tx:
                 "rx_text": rx_text
             }
 
-    # Renderar grafer för sändare
     if st.session_state.history:
         st.subheader("Skickade Bitar (inkl. start/stopp)")
         st.code(st.session_state.history["tx_bits"])
@@ -244,7 +256,6 @@ with col_rx:
         else:
             st.info("Ingen graf att visa.")
             
-        # Formatera datan för .txt-loggen
         txt_log_content = (
             "--- LOGG FÖR OPTISK KOMMUNIKATION ---\n\n"
             f"Skickat meddelande: {data['original_text']}\n"
