@@ -38,3 +38,12 @@ python hastighetstest.py --simulate --repeats 1
 ```
 
 Simuleringen använder idealiska signalnivåer med lite brus och markerar resultatmappen SIMULERING. Den verifierar testflödet, inte LC-kristallens prestanda. Dess tid är syntetisk.
+
+## Flernivåläge
+
+Välj `--levels 4` eller `--levels 8` och ange 3 respektive 7 stigande
+`--threshold`-värden. `--bit-ms` anger då **symboltid** i millisekunder;
+tätheten är 2 respektive 3 nyttobitar per symbol före ramoverhead.
+Äldre CSV-kolumnnamn med `bittid` behålls, men avser symboltid i dessa lägen.
+Valt nivåantal och trösklar sparas i `installningar.json`. Samma ramavkodare
+som i `program.py` används. Se README för körbara simuleringsexempel.

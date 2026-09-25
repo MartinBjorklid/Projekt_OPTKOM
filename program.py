@@ -1,38 +1,39 @@
-"""Ersätt innehållet i program.py med denna fil när taemot_synk.py
-har kopierats till taemot.py. skicka.py/Signalbehandling.py behålls.
-"""
+"""Huffman och Hamming över optisk länk med valbara 2, 4 eller 8 nivåer."""
 
 import threading
 import time
 
-from skicka import send_binary_list, step_time, Start_seq, Slut_seq
+from skicka import send_payload
 from taemot import receive_continuous
-from Signalbehandling import huffman_decode, huffman_encode, encode, decode, codes, tree
+from Signalbehandling import (huffman_decode, huffman_encode, encode, decode, codes, tree,
+                              communication_args, frame_symbols)
 
 
-def main():
+def main(argv=None):
+    args = communication_args(argv, "Optisk kommunikation med 2, 4 eller 8 nivåer")
     text = input("Skriv ett meddelande: ").lower()
     komprimerade_bitar = huffman_encode(text, codes)
     kodade_bitar, H, padding = encode(komprimerade_bitar)
     nyttobitar = kodade_bitar.tolist()
     
-    # Den befintliga slutsekvensen kan fortfarande förekomma INNE i andra meddelanden.
-    for i in range(len(nyttobitar) - len(Slut_seq) + 1):
-        if nyttobitar[i:i + len(Slut_seq)] == Slut_seq:
-            print("Slutsekvensen förekommer i nyttodatan. Välj annat meddelande "
-                  "för detta test, eller byt till ett protokoll med längdfält.")
-            return
+    ram = frame_symbols(nyttobitar, args.levels)
 
     mottagna_bitar = []
     redo = threading.Event()
-    timeout_s = max(15.0, (len(Start_seq) + len(nyttobitar) + len(Slut_seq)) * step_time + 6)
+    mottagarfel = []
+    timeout_s = max(15.0, len(ram) * args.step_time + 6)
 
     def lyssna():
         nonlocal mottagna_bitar
-        mottagna_bitar = receive_continuous(
-            step_time=step_time, channel="Dev1/ai0", threshold=2.3,
-            timeout_s=timeout_s, ready_event=redo,
-        )
+        try:
+            mottagna_bitar = receive_continuous(
+                step_time=args.step_time, channel="Dev1/ai0", threshold=args.threshold,
+                levels=args.levels, timeout_s=timeout_s, ready_event=redo,
+            )
+        except Exception as exc:
+            mottagarfel.append(str(exc))
+            redo.set()
+
 
     trad = threading.Thread(target=lyssna)
     trad.start()
@@ -42,14 +43,16 @@ def main():
         return
 
     if not trad.is_alive():
-        print("Mottagaren kunde inte startas. Kontrollera DAQ och felutskriften.")
+        print("Mottagaren kunde inte startas. Kontrollera DAQ och felutskriften.", *mottagarfel)
         return
 
     # Liten viloperiod för att avkodaren ska hinna se signalnivån före start.
     time.sleep(0.2)
     print("\n[MAIN] Startar sändningen...")
-    send_binary_list(Start_seq + nyttobitar + Slut_seq)
-    trad.join(timeout=timeout_s + 3)
+    try:
+        send_payload(nyttobitar, step_time=args.step_time, levels=args.levels)
+    finally:
+        trad.join(timeout=timeout_s + 3)
     if trad.is_alive():
         print("Mottagaren avslutades inte inom tidsgränsen.")
         return

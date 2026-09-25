@@ -7,42 +7,24 @@ from datetime import datetime
 from pathlib import Path
 
 import numpy as np
+from Signalbehandling import frame_symbols, symbol_voltages, validate_thresholds
 
 START = [1, 1, 1, 1, 0, 0]
 SLUT = [1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1]
 
 
-def decode_signal(signal, n, threshold, payload_size):
-    """Synka enbart mot startsekvensen, aldrig mot nyttodatans facit.
-
-    Samma princip som taemot_synk: första godkända stigande flank,
-    median i bitens mittersta tredjedel, fast bitklocka och slutord.
-    """
-    def bit(start, j):
-        a = start + j * n + n // 3
-        b = start + j * n + 2 * n // 3
-        return int(np.median(signal[a:b]) >= threshold)
-
-    edges = np.flatnonzero((signal[:-1] < threshold) & (signal[1:] >= threshold)) + 1
-    for start in edges:
-        if start + len(START) * n > len(signal):
-            break
-        if start >= n and np.median(signal[start-n:start]) >= threshold:
-            continue
-        if [bit(start, j) for j in range(len(START))] != START:
-            continue
-        result = []
-        for j in range(len(START), len(START) + payload_size + len(SLUT) + 1):
-            if start + (j + 1) * n > len(signal):
-                return None
-            result.append(bit(start, j))
-            if len(result) >= len(SLUT) and result[-len(SLUT):] == SLUT:
-                return result[:-len(SLUT)]
+def decode_signal(signal, n, threshold, payload_size, levels=2):
+    """Samma avkodare som i program.py, utan jämförelse mot facit."""
+    from taemot import SynkadBitavkodare
+    decoder = SynkadBitavkodare(n, threshold, max_payload_bits=payload_size, levels=levels)
+    try:
+        decoder.mata_in(signal)
+    except (ValueError, RuntimeError):
         return None
-    return None
+    return decoder.payload if decoder.klar else None
 
 
-def payload(pattern, size, rng):
+def payload(pattern, size, rng, levels=2):
     # Slutord i nyttodata eller över nyttodata/slutord-gränsen skulle ge
     # förtida avslut även på en perfekt länk. Välj därför giltiga testramar.
     for _ in range(10000):
@@ -53,7 +35,7 @@ def payload(pattern, size, rng):
         else:
             bits = ((np.arange(size) // 16) % 2).tolist()
         joined = bits + SLUT
-        if all(joined[i:i+len(SLUT)] != SLUT for i in range(size)):
+        if levels > 2 or all(joined[i:i+len(SLUT)] != SLUT for i in range(size)):
             return bits
         if pattern != 'slump':
             break
@@ -67,7 +49,7 @@ def acquire(frame, dt, args):
     rate = args.sample_rate
     pre = int(round(args.idle * rate))
     post = int(round(args.idle * rate))
-    volts = np.asarray(frame, dtype=float) * 5 * (-1.0) ** np.arange(len(frame))
+    volts = np.asarray(symbol_voltages(frame, args.levels))
     volts = np.concatenate((volts, [0.0]))
     began = time.perf_counter()
     try:
@@ -102,7 +84,7 @@ def acquire(frame, dt, args):
 
 def simulate(frame, dt, args, rng):
     n = round(args.sample_rate * dt)
-    levels = np.repeat(frame, n).astype(float) * 4
+    levels = np.repeat(frame, n).astype(float) * 4 / (args.levels-1)
     signal = np.concatenate((np.zeros(round(args.idle * args.sample_rate)), levels,
                              np.zeros(round(args.idle * args.sample_rate))))
     signal += rng.normal(0, .05, len(signal))
@@ -115,7 +97,8 @@ def main():
     p.add_argument('--bit-ms', nargs='+', type=float, default=[8, 6, 4, 3, 2])
     p.add_argument('--repeats', type=int, default=10)
     p.add_argument('--bits', type=int, default=256)
-    p.add_argument('--threshold', type=float, default=3.0)
+    p.add_argument('--threshold', type=float, nargs='+')
+    p.add_argument('--levels', type=int, choices=(2, 4, 8), default=2)
     p.add_argument('--sample-rate', type=int, default=20000)
     p.add_argument('--idle', type=float, default=.2)
     p.add_argument('--seed', type=int, default=2026)
@@ -124,9 +107,14 @@ def main():
     p.add_argument('--save-raw', action='store_true')
     p.add_argument('--output', type=Path, default=Path('testresultat'))
     a = p.parse_args()
+    try:
+        a.threshold = validate_thresholds(a.threshold if a.threshold is not None else
+                                          ([3.0] if a.levels == 2 else None), a.levels)
+    except ValueError as exc:
+        p.error(str(exc))
     if not (1 <= a.repeats <= 10000 and 1 <= a.bits <= 4096):
         p.error('repeats måste vara 1–10000 och bits 1–4096.')
-    if not (1 <= a.sample_rate <= 100000 and np.isfinite(a.threshold)
+    if not (1 <= a.sample_rate <= 100000 and np.all(np.isfinite(a.threshold))
             and np.isfinite(a.idle) and .01 <= a.idle <= 10):
         p.error('Ogiltig samplingsfrekvens, tröskel eller vilotid.')
     for ms in a.bit_ms:
@@ -138,7 +126,7 @@ def main():
     (folder / 'installningar.json').write_text(json.dumps(vars(a), default=str, indent=2), encoding='utf-8')
     rng = np.random.default_rng(a.seed)
     # Samma nyttodata vid samtliga hastigheter ger jämförbara försök.
-    cases = [(pattern, i+1, payload(pattern, a.bits, rng))
+    cases = [(pattern, i+1, payload(pattern, a.bits, rng, a.levels))
              for pattern in ('vaxlande', 'langa', 'slump') for i in range(a.repeats)]
     rows = []
     columns = ['bittid_ms', 'monster', 'forsok', 'korrekt', 'paketfel', 'jamforda_bitar',
@@ -150,14 +138,14 @@ def main():
         writer.writeheader()
         for ms in a.bit_ms:
             for pattern, trial, expected in cases:
-                frame = START + expected + SLUT
+                frame = frame_symbols(expected, a.levels)
                 # Hårdvarufel avbryter testet, de är inte optiska paketfel.
                 signal, rate, dt, elapsed = (simulate(frame, ms/1000, a, rng) if a.simulate
                                              else acquire(frame, ms/1000, a))
                 n = rate * dt
                 if abs(n-round(n)) > 1e-6:
                     raise RuntimeError('DAQ avrundade klockan till icke-heltal sampel/bit. Välj annan bittid.')
-                received = decode_signal(signal, round(n), a.threshold, len(expected))
+                received = decode_signal(signal, round(n), a.threshold, len(expected), a.levels)
                 comparable = received is not None and len(received) == len(expected)
                 errors = sum(x != y for x, y in zip(expected, received)) if comparable else ''
                 ok = comparable and errors == 0

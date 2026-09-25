@@ -298,3 +298,111 @@ codes = create_huffman_codes(tree)
 # ):
 #     print(repr(char), "->", code)
 
+
+
+# ============================================================
+# Flernivåmodulering: bitar -> symboler -> amplituder
+# ============================================================
+START_BITS = [1, 1, 1, 1, 0, 0]
+STOP_BITS = [1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1]
+MAX_PAYLOAD_BITS = 4096
+
+
+def bits_per_symbol(levels):
+    if levels not in (2, 4, 8):
+        raise ValueError("Antal nivåer måste vara 2, 4 eller 8.")
+    return {2: 1, 4: 2, 8: 3}[levels]
+
+
+def validate_thresholds(threshold, levels=2):
+    bits_per_symbol(levels)
+    if threshold is None:
+        if levels != 2:
+            raise ValueError("Ange uppmätta --threshold-värden för 4/8 nivåer.")
+        threshold = [2.3]
+    values = np.atleast_1d(threshold).astype(float)
+    if (values.ndim != 1 or len(values) != levels - 1
+            or not np.all(np.isfinite(values)) or np.any(np.diff(values) <= 0)):
+        raise ValueError(f"Ange {levels - 1} ändliga, strikt stigande tröskelvärden.")
+    return values.tolist()
+
+
+def validate_step_time(value):
+    if not np.isfinite(value) or value < 0.00025:
+        raise ValueError("Symboltiden måste vara ändlig och minst 0,00025 s.")
+    return value
+
+
+def bits_to_symbols(bits, levels=2):
+    width = bits_per_symbol(levels)
+    bits = list(bits)
+    if any(bit not in (0, 1) for bit in bits):
+        raise ValueError("Bitar får bara vara 0 eller 1.")
+    padded = bits + [0] * (-len(bits) % width)
+    return [sum(int(bit) << (width - j - 1) for j, bit in enumerate(padded[i:i+width]))
+            for i in range(0, len(padded), width)]
+
+
+def symbols_to_bits(symbols, levels=2):
+    width = bits_per_symbol(levels)
+    symbols = list(symbols)
+    if any(int(s) != s or not 0 <= s < levels for s in symbols):
+        raise ValueError("Symbol utanför valt nivåintervall.")
+    return [(int(s) >> shift) & 1 for s in symbols for shift in range(width-1, -1, -1)]
+
+
+def frame_symbols(payload, levels=2):
+    """Binärt legacyformat; 4/8 nivåer har längd + inverterad längd.
+
+    Start, 16-bitars längd, dess bitvisa invers och stopp sänds med
+    yttersta nivåerna. Nyttodata packas MSB först med nollutfyllnad.
+    """
+    bits_per_symbol(levels)
+    payload = list(payload)
+    packed = bits_to_symbols(payload, levels)
+    if len(payload) > MAX_PAYLOAD_BITS:
+        raise ValueError("Meddelandet överstiger 4096 nyttobitar.")
+    if levels == 2:
+        joined = payload + STOP_BITS
+        if any(joined[i:i+len(STOP_BITS)] == STOP_BITS for i in range(len(payload))):
+            raise ValueError("Slutsekvens i nyttodata eller ramgräns; välj annan text eller 4/8 nivåer.")
+        return START_BITS + joined
+    length = [int(c) for c in f"{len(payload):016b}"]
+    header = length + [1-b for b in length]
+    return ([b * (levels-1) for b in START_BITS + header] + packed
+            + [b * (levels-1) for b in STOP_BITS])
+
+
+def symbol_voltages(symbols, levels=2):
+    symbols = list(symbols)
+    symbols_to_bits(symbols, levels)  # validera före hårdvaruanrop
+    return [float(s) * 5.0 / (levels-1) * (-1 if i % 2 else 1)
+            for i, s in enumerate(symbols)]
+
+
+def communication_args(argv=None, description=None, default_threshold=2.3, receiving=True):
+    """Gemensamt CLI; --step time SEK accepteras också."""
+    import argparse
+    import sys
+    args = list(sys.argv[1:] if argv is None else argv)
+    for i in range(len(args)-2, -1, -1):
+        if args[i:i+2] == ["--step", "time"]:
+            args[i:i+2] = ["--step-time"]
+    parser = argparse.ArgumentParser(description=description)
+    parser.add_argument("--levels", type=int, choices=(2, 4, 8), default=2,
+                        help="Antal signalnivåer (standard 2).")
+    parser.add_argument("--threshold", type=float, nargs="+", metavar="V",
+                        help="1, 3 eller 7 stigande AI-trösklar i volt för 2, 4 eller 8 nivåer.")
+    parser.add_argument("--step-time", "--step_time", type=float, default=0.004,
+                        help="Sekunder per symbol (standard 0.004).")
+    parsed = parser.parse_args(args)
+    parsed.step_time_explicit = any(a.split("=")[0] in ("--step-time", "--step_time") for a in args)
+    try:
+        if parsed.threshold is None and parsed.levels == 2:
+            parsed.threshold = [default_threshold]
+        if receiving or parsed.threshold is not None:
+            parsed.threshold = validate_thresholds(parsed.threshold, parsed.levels)
+        validate_step_time(parsed.step_time)
+    except ValueError as exc:
+        parser.error(str(exc))
+    return parsed

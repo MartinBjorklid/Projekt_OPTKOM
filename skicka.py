@@ -1,32 +1,31 @@
-import sys
-#from unittest.mock import MagicMock
+import math
 
-# Lura systemet att nidaqmx och dess konstanter är installerade
-#sys.modules['nidaqmx'] = MagicMock()
-#sys.modules['nidaqmx.constants'] = MagicMock()
-
-import nidaqmx 
-import nidaqmx.constants
-from nidaqmx.constants import AcquisitionType
 import matplotlib.pyplot as plt
-from Signalbehandling import huffman_encode, codes,tree,huffman_decode
+from Signalbehandling import (huffman_encode, codes, frame_symbols, symbol_voltages,
+                              validate_step_time, communication_args,
+                              START_BITS, STOP_BITS)
 
-Start_seq = [1,1,1,1,0,0]
-Slut_seq = [1,0,1,1,1,0,0,1,1,0,1,1,1]
+Start_seq = START_BITS
+Slut_seq = STOP_BITS
 step_time = 0.004
 
-def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0"):
+def send_symbols(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0", levels=2):
     """
-    Skickar en lista med 0/1 till NI USB-6003 med HÅRDVARUKLOCKA.
+    Skickar en lista med symboler till NI USB-6003 med HÅRDVARUKLOCKA.
     """
    
+    import nidaqmx
+
     if not isinstance(values, list) or len(values) == 0:
         raise ValueError("Ogiltig lista")
 
     # -----------------------------
-    # Konvertera 0/1 -> 0/5 V (med alternerande polaritet för LC-kristallen)
+    # Konvertera symbol -> 0...5 V (med alternerande polaritet för LC-kristallen)
     # -----------------------------
-    voltages = [value * 5.0 * ((-1) ** i) for i, value in enumerate(values)]
+    validate_step_time(step_time)
+    if not math.isfinite(extra_time) or extra_time < 0:
+        raise ValueError("extra_time måste vara ändlig och icke-negativ.")
+    voltages = symbol_voltages(values, levels)
     
     # För "extra_time", lägger vi helt enkelt till nollor i slutet av listan
     # Vi räknar ut hur många "steg" som ryms i extra_time
@@ -38,7 +37,7 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
     # -----------------------------
     sample_rate = 1.0 / step_time
     
-    print(f"Skickar data med hastigheten {sample_rate} Hz (bits/sekund)...")
+    print(f"Skickar data med hastigheten {sample_rate} symboler/sekund...")
 
     try:
         with nidaqmx.Task() as task:
@@ -120,7 +119,17 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
     plt.pause(2)
 
 
-def send(text):
+def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0"):
+    """Bakåtkompatibel rå binär sändare (ramen ingår i values)."""
+    return send_symbols(values, step_time, extra_time, channel, levels=2)
+
+
+def send_payload(bits, step_time=step_time, levels=2, channel="Dev1/ao0"):
+    return send_symbols(frame_symbols(bits, levels), step_time=step_time,
+                        levels=levels, channel=channel)
+
+
+def send(text, step_time=step_time, levels=2):
 
 # Gör texten till små bokstäver
     text = text.lower()
@@ -135,29 +144,24 @@ def send(text):
     print("Bit-kod:")
     print(encoded)
 
-    fullt_medelanda = Start_seq + encoded + Slut_seq
+    fullt_medelanda = frame_symbols(encoded, levels)
     print(fullt_medelanda)
     print()
     print ("Antal bitar komprimerat")
     print(len(encoded))
-    print("Antal bitar att skicka:")
+    print("Antal symboler att skicka:")
     print(len(fullt_medelanda))
 
     print() 
     print("Antal bitar okomprimetat")
     print(len(text)*8)
     
-    return send_binary_list(fullt_medelanda)
+    return send_symbols(fullt_medelanda, step_time=step_time, levels=levels)
 
 
 
 
 if __name__ == "__main__":
-    text = input("Skriv ett meddelande i main: ")
-    send(text)
-    
-
-   
-
-
-
+    args = communication_args(description="Skicka optiskt meddelande", receiving=False)
+    text = input("Skriv ett meddelande: ")
+    send(text, step_time=args.step_time, levels=args.levels)
