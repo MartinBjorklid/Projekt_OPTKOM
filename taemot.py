@@ -8,7 +8,7 @@ from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
 class SynkadBitavkodare:
     """Tar emot en ström av AI-sampel och avläser bitar i deras mitt."""
 
-    def __init__(self, sampel_per_bit, threshold=2.3, max_payload_bits=4096):
+    def __init__(self, sampel_per_bit, threshold=3.0, max_payload_bits=4096):
         self.n = int(sampel_per_bit)
         if self.n < 12:
             raise ValueError("För få AI-sampel per bit; öka AI-samplingsfrekvensen.")

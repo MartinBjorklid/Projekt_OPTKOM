@@ -156,7 +156,7 @@ with col_tx:
                 def lyssna_i_bakgrunden():
                     res = receive_continuous(
                         step_time=step_time_input, channel="Dev1/ai0", 
-                        threshold=2.3, timeout_s=timeout_s, ready_event=redo
+                        threshold=3.0, timeout_s=timeout_s, ready_event=redo
                     )
                     motagna_resultat.append(res)
 
