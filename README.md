@@ -1,4 +1,4 @@
-# Projekt_OPTKOM UNSTABLE-BRANCH
+# Projekt_OPTKOM Interface
 
 >[!NOTE]
 >Odsen att denna kod funkar utan felsökning är typ noll och därför ligger den här koden här...
@@ -15,6 +15,9 @@
   * numpy
   * nidaqmx
   * matplotlib
+
+>[!NOTE]
+>Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som inte kör windows. 
   
   Detta görs via körning av följande kommando: ```pip install [paket]```.
   
