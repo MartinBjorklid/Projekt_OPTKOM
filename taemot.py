@@ -1,7 +1,5 @@
 import time
 import numpy as np
-import nidaqmx
-from nidaqmx.constants import AcquisitionType, TerminalConfiguration
 
 from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
 
@@ -65,6 +63,11 @@ class SynkadBitavkodare:
 
 def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
                        threshold=2.3, timeout_s=15.0, ready_event=None):
+    
+    # Lokal import: Kraschar inte om man kör i simuleringsläget utan nidaqmx installerat
+    import nidaqmx
+    from nidaqmx.constants import AcquisitionType, TerminalConfiguration
+    
     if step_time <= 0:
         raise ValueError("step_time måste vara positiv.")
     
@@ -101,17 +104,18 @@ def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
                 avkodare.mata_in(block)
                 if avkodare.klar:
                     print(f"Slutsekvens mottagen. {len(avkodare.payload)} nyttobitar.")
-                    return avkodare.payload
+                    # NYTT: Returnerar både payload OCH all rådata som samlats in
+                    return avkodare.payload, avkodare.data
 
     except Exception as exc:
-        print(f"Mottagarfel: {exc}")
-        return []
+        raise RuntimeError(f"Hårdvarufel i DAQ-kortet: {exc}")
+        
     finally:
         if ready_event is not None:
             ready_event.set()
 
     print("Timeout: ingen fullständig ram mottagen.")
-    return []
+    return [], []
 
 if __name__ == "__main__":
     print("Mottagna nyttobitar:", receive_continuous())

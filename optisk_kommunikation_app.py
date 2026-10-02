@@ -106,7 +106,7 @@ with col_tx:
             kodade_bitar, H, padding = encode(komprimerade_bitar)
             nyttobitar = kodade_bitar.tolist()
             
-            # 2. Varning om slutsekvens finns i nyttodatan (Från main)
+            # 2. Varning om slutsekvens finns i nyttodatan
             for i in range(len(nyttobitar) - len(Slut_seq) + 1):
                 if nyttobitar[i:i + len(Slut_seq)] == Slut_seq:
                     st.warning("Slutsekvensen förekommer i nyttodatan. Välj annat meddelande.")
@@ -148,37 +148,75 @@ with col_tx:
                 time.sleep(simulated_transfer_time)
                 
                 simulated_payload = tx_bits_full[len(Start_seq):-len(Slut_seq)]
-                motagna_resultat.append(simulated_payload)
+                
+                # Generera en realistisk analog signal med brus
+                sampel_per_bit = max(25, int(round(5000 * step_time_input)))
+                sim_raw_data = []
+                for bit in tx_bits_full:
+                    # En fotodetektor ger oftast inte perfekt 0V och 5V
+                    volts = 4.8 if bit == 1 else 0.2
+                    sim_raw_data.extend([volts] * sampel_per_bit)
+                
+                # Lägger på Gausiskt brus för att efterlikna en riktig analog mätning
+                sim_raw_data = np.array(sim_raw_data) + np.random.normal(0, 0.4, len(sim_raw_data))
+                
+                motagna_resultat.append((simulated_payload, sim_raw_data.tolist()))
                 st.toast("Simulerad överföring klar!", icon="🤖")
                 
             else:
                 # --- RIKTIG HÅRDVARA (MAIN-TRÅDNING) ---
+                mottagar_fel = [] 
+                
                 def lyssna_i_bakgrunden():
-                    res = receive_continuous(
-                        step_time=step_time_input, channel="Dev1/ai0", 
-                        threshold=3.0, timeout_s=timeout_s, ready_event=redo
-                    )
-                    motagna_resultat.append(res)
+                    try:
+                        res_bits, res_raw = receive_continuous(
+                            step_time=step_time_input, channel="Dev1/ai0", 
+                            threshold=3.0, timeout_s=timeout_s, ready_event=redo
+                        )
+                        motagna_resultat.append((res_bits, res_raw))
+                    except Exception as e:
+                        mottagar_fel.append(str(e))
+                        redo.set()
 
                 mottagar_trad = threading.Thread(target=lyssna_i_bakgrunden)
                 mottagar_trad.start()
                 
                 if not redo.wait(timeout=5.0):
-                    st.error("Mottagaren kunde inte startas.")
+                    st.error("Mottagaren kunde inte startas inom 5 sekunder (Timeout).")
                     mottagar_trad.join(timeout=timeout_s + 3)
                     st.stop()
+                    
+                if mottagar_fel:
+                    error_msg = mottagar_fel[0]
+                    st.error(f"Kritiskt fel i mottagaren: {error_msg}")
+                    if "nidaqmx" in error_msg.lower():
+                        st.info("💡 Tips: Modulen 'nidaqmx' saknas. Slå på 'Simulera Hårdvara' i Debug-menyn om du vill testköra utan DAQ-kortet!")
+                    st.stop()
                 
-                time.sleep(0.2) # Viloperiod före sändning
+                time.sleep(0.2) 
                 
                 try:
                     send_binary_list(tx_bits_full, step_time=step_time_input, extra_time=extra_time_input, channel="Dev1/ao0")
                 except Exception as e:
-                    st.error(f"DAQ-fel (Sändare): {e}")
+                    error_msg = str(e)
+                    st.error(f"DAQ-fel (Sändare): {error_msg}")
+                    if "nidaqmx" in error_msg.lower():
+                        st.info("💡 Tips: Modulen 'nidaqmx' saknas. Slå på 'Simulera Hårdvara' i Debug-menyn om du vill testköra utan DAQ-kortet!")
+                    st.stop()
                 
                 mottagar_trad.join(timeout=timeout_s + 3)
+                
+                if mottagar_fel:
+                    st.error(f"Fel under mottagning: {mottagar_fel[0]}")
+                    st.stop()
             
+            # Packa upp resultatet
+            if motagna_resultat:
+                rx_bits, raw_data = motagna_resultat[0]
+            else:
+                rx_bits, raw_data = [], []
+                
             # Avkoda mottagen signal
-            rx_bits = motagna_resultat[0] if motagna_resultat else []
             if rx_bits:
                 if is_manual:
                     rx_text = "[Manuell sändning - Avkodning inaktiverad]"
@@ -194,7 +232,7 @@ with col_tx:
             else:
                 rx_text = "[Ingen data mottogs]"
             
-            # Skapa graf Sändare
+            # Skapa graf Sändare (Ideal fyrkantsvåg)
             tx_times = []
             tx_volts = []
             for i, val in enumerate(tx_bits_full):
@@ -205,16 +243,14 @@ with col_tx:
                 tx_volts.extend([v, v])
             tx_df = pd.DataFrame({"Tid (s)": tx_times, "Spänning (V)": tx_volts}).set_index("Tid (s)")
             
-            # Skapa graf Mottagare
-            rx_times = []
-            rx_volts = []
-            for i, val in enumerate(rx_bits):
-                t_start = i * step_time_input
-                t_end = (i + 1) * step_time_input - 1e-6
-                v = val * 5.0
-                rx_times.extend([t_start, t_end])
-                rx_volts.extend([v, v])
-            rx_df = pd.DataFrame({"Tid (s)": rx_times, "Spänning (V)": rx_volts}).set_index("Tid (s)") if rx_bits else None
+            # Skapa graf Mottagare (Verklig eller simulerad rådata)
+            if raw_data:
+                sampel_per_bit = max(25, int(round(5000 * step_time_input)))
+                sample_rate = sampel_per_bit / step_time_input
+                rx_times = np.arange(len(raw_data)) / sample_rate
+                rx_df = pd.DataFrame({"Time (s)": rx_times, "Voltage (V)": raw_data}).set_index("Time (s)")
+            else:
+                rx_df = None
             
             # Spara state
             st.session_state.history = {
@@ -250,26 +286,43 @@ with col_rx:
         st.subheader("Mottagna Bitar (ren data)")
         st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
         
-        st.subheader("Mottagen Utsignal (Idealiserad Volt)")
+        st.subheader("Fotodetektorns Utsignal (Volt)")
         if data["rx_df"] is not None:
+            # Nu plotts den riktiga analoga mätningen med rätt tidsaxel
             st.line_chart(data["rx_df"], color="#21c354")
         else:
             st.info("Ingen graf att visa.")
             
         txt_log_content = (
             "--- LOGG FÖR OPTISK KOMMUNIKATION ---\n\n"
-            f"Skickat meddelande: {data['original_text']}\n"
-            f"Skickat meddelande konverterat till bits (inkl seq): {data['tx_bits']}\n"
-            f"Mottagna bits (exkl seq): {data['rx_bits']}\n"
-            f"Avkodat mottaget meddelande: {data['rx_text']}\n"
+            f"Sent message: {data['original_text']}\n"
+            f"Sent message converted to bits (incl seq): {data['tx_bits']}\n"
+            f"Received bits (excl seq): {data['rx_bits']}\n"
+            f"Decoded received message: {data['rx_text']}\n"
         )
         
-        st.download_button(
-            label="📄 Spara meddelandelogg (.txt)",
-            data=txt_log_content.encode('utf-8'),
-            file_name=f"meddelandelogg-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
-            mime="text/plain",
-            use_container_width=True
-        )
+        st.markdown("### Nedladdning av data")
+        col_btn1, col_btn2 = st.columns(2)
+        
+        with col_btn1:
+            st.download_button(
+                label="📄 Spara textlogg (.txt)",
+                data=txt_log_content.encode('utf-8'),
+                file_name=f"sent-message-log-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
+                mime="text/plain",
+                use_container_width=True
+            )
+            
+        with col_btn2:
+            if data["rx_df"] is not None:
+                # Konverterar Pandas-dataframen till CSV (behåller tid som index och spänning som kolumn)
+                csv_data = data["rx_df"].to_csv(index=True).encode('utf-8')
+                st.download_button(
+                    label="📊 Spara analog rådata (.csv)",
+                    data=csv_data,
+                    file_name=f"raw-data-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+                    mime="text/csv",
+                    use_container_width=True
+                )
     else:
         st.info("Väntar på inkommande signal...")

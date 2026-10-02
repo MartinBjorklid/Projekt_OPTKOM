@@ -1,7 +1,4 @@
 import sys
-import nidaqmx 
-import nidaqmx.constants
-from nidaqmx.constants import AcquisitionType
 import matplotlib.pyplot as plt
 from Signalbehandling import huffman_encode, codes, tree, huffman_decode
 
@@ -13,6 +10,9 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
     """
     Skickar en lista med 0/1 till NI USB-6003 med HÅRDVARUKLOCKA.
     """
+    # Lokal import: Kraschar inte om man kör i simuleringsläget utan nidaqmx installerat
+    import nidaqmx 
+
     if not isinstance(values, list) or len(values) == 0:
         raise ValueError("Ogiltig lista")
 
