@@ -15,6 +15,7 @@
   * numpy
   * nidaqmx
   * matplotlib
+  * watchdog (ej obligatorisk, ger bättre prestanda)
 
 >[!NOTE]
 >Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som inte kör windows. 
