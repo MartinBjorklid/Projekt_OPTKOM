@@ -294,11 +294,17 @@ with col_rx:
             st.info("Ingen graf att visa.")
             
         txt_log_content = (
-            "--- LOGG FÖR OPTISK KOMMUNIKATION ---\n\n"
+            "--- OPTKOM MESSAGE LOG ---\n\n"
+            f"Timestamp: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
             f"Sent message: {data['original_text']}\n"
+            f"Simulated hardware: {'Yes' if simulate_hw else 'No'}\n"
+            f"Step time (s/bit): {step_time_input:.5f}\n"
+            f"Sample rate (bit/s): {1.0 / step_time_input:.2f}\n"
+            f"Extra time (s): {extra_time_input:.2f}\n"
             f"Sent message converted to bits (incl seq): {data['tx_bits']}\n"
             f"Received bits (excl seq): {data['rx_bits']}\n"
             f"Decoded received message: {data['rx_text']}\n"
+            f"Error in decoding: {'Yes' if data['rx_text'] != data['original_text'] else 'No'}\n"
         )
         
         st.markdown("### Nedladdning av data")
