@@ -1,7 +1,7 @@
 # Projekt_OPTKOM Interface
 
 >[!NOTE]
->Odsen att denna kod funkar utan felsökning är typ noll och därför ligger den här koden här...
+>Oddsen att denna kod funkar utan felsökning är typ noll och därför ligger den här koden här...
 
 ## Installation
 1. Installera python
