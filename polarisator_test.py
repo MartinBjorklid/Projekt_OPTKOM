@@ -394,12 +394,12 @@ try:
                     lc_frequency = value
                     reconfigure = True
             
-                        elif command == "amp":
-            
-                            if 0 <= value <= 10:
-            
-                                lc_amplitude = value
-                                reconfigure = True
+            elif command == "amp":
+
+                if 0 <= value <= 10:
+
+                    lc_amplitude = value
+                    reconfigure = True
 
                 else:
 
