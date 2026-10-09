@@ -368,23 +368,38 @@ try:
                 break
 
             elif command == "freq":
-
-                if value < 1:
-                    print("LC-frekvensen ska vara minst 1 Hz.")
-
+    
+                if value == 0:
+                    # Specialläge: långsam, symmetrisk bipolar fyrkantvåg
+                    lc_frequency = 0.5
+                    waveform = "square"
+                    reconfigure = True
+            
+                    print(
+                        "Växlande mätläge aktiverat: "
+                        f"+/- {lc_amplitude:.2f} V, "
+                        "0.5 Hz (ca 1 s per polaritet)."
+                    )
+            
+                elif value < 0:
+                    print("Frekvensen kan inte vara negativ.")
+            
                 elif value >= sample_rate / 2:
-                    print("Frekvensen är för hög för aktuell sample rate.")
-
+                    print(
+                        "Frekvensen är för hög "
+                        "för aktuell sample rate."
+                    )
+            
                 else:
                     lc_frequency = value
                     reconfigure = True
-
-            elif command == "amp":
-
-                if 0 <= value <= 10:
-
-                    lc_amplitude = value
-                    reconfigure = True
+            
+                        elif command == "amp":
+            
+                            if 0 <= value <= 10:
+            
+                                lc_amplitude = value
+                                reconfigure = True
 
                 else:
 
