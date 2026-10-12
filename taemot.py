@@ -1,6 +1,5 @@
 import time
 import numpy as np
-
 from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
 
 class SynkadBitavkodare:

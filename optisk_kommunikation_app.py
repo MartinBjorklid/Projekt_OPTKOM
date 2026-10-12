@@ -29,6 +29,9 @@ if 'step_time_val' not in st.session_state:
 if 'sample_rate_val' not in st.session_state:
     st.session_state.sample_rate_val = 250.0
 
+if 'threshold_val' not in st.session_state:
+    st.session_state.threshold_val = 3.0
+
 def update_sample_rate():
     if st.session_state.step_time_val > 0:
         st.session_state.sample_rate_val = 1.0 / st.session_state.step_time_val
@@ -40,6 +43,12 @@ def update_step_time():
         st.session_state.step_time_val = 1.0 / st.session_state.sample_rate_val
     else:
         st.session_state.step_time_val = 0.0
+
+def update_threshold():
+    if st.session_state.threshold_val < 0.0:
+        st.session_state.threshold_val = 0.0
+    if st.session_state.threshold_val > 5.0:
+        st.session_state.threshold_val = 5.0
 
 # ---------------------------------------------------------
 # 2. HUVUDMENY
@@ -67,6 +76,8 @@ with st.expander("🛠️ Debug-meny"):
         
     with col_t2:
         extra_time_input = st.number_input("Extra Time (s)", min_value=0.0, max_value=5.0, value=1.0, step=0.1)
+
+        st.number_input("Tröskelvärde (V)", min_value=0.0, max_value=5.0, step=0.1, key="threshold_val")
     
     st.markdown("### Simulering")
     simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False)
@@ -140,6 +151,7 @@ with col_tx:
             motagna_resultat = []
             redo = threading.Event()
             timeout_s = max(15.0, (len(tx_bits_full)) * step_time_input + 6.0)
+            decode_threshold = st.session_state.threshold_val 
             
             if simulate_hw:
                 # --- SIMULERINGSLÄGE ---
@@ -147,21 +159,34 @@ with col_tx:
                 simulated_transfer_time = len(tx_bits_full) * step_time_input
                 time.sleep(simulated_transfer_time)
                 
-                simulated_payload = tx_bits_full[len(Start_seq):-len(Slut_seq)]
-                
-                # Generera en realistisk analog signal med brus
                 sampel_per_bit = max(25, int(round(5000 * step_time_input)))
-                sim_raw_data = []
+                
+                # Vi måste lägga in "tystnad/brus" i början av signalen!
+                # Detta simulerar tiden mottagaren lyssnar innan sändaren börjar skicka.
+                # Utan detta hittar inte avkodaren 0->1-flanken som startar sekvensen.
+                idle_samples = int(4 * sampel_per_bit)
+                sim_raw_data = [0.2] * idle_samples
+                
+                # Lägg på själva meddelandet
                 for bit in tx_bits_full:
-                    # En fotodetektor ger oftast inte perfekt 0V och 5V
                     volts = 4.8 if bit == 1 else 0.2
                     sim_raw_data.extend([volts] * sampel_per_bit)
                 
-                # Lägger på Gausiskt brus för att efterlikna en riktig analog mätning
-                sim_raw_data = np.array(sim_raw_data) + np.random.normal(0, 0.4, len(sim_raw_data))
+                # Lite tystnad på slutet också
+                sim_raw_data.extend([0.2] * idle_samples)
                 
+                # Lägger på Gausiskt brus
+                sim_raw_data = np.array(sim_raw_data) + np.random.normal(0, 0.1, len(sim_raw_data))
+                
+                # 2. AVKODA DEN SIMULERADE SIGNALEN
+                from taemot import SynkadBitavkodare
+                sim_avkodare = SynkadBitavkodare(sampel_per_bit, threshold=decode_threshold)
+                
+                sim_avkodare.mata_in(sim_raw_data.tolist())
+                
+                simulated_payload = sim_avkodare.payload if sim_avkodare.klar else []
                 motagna_resultat.append((simulated_payload, sim_raw_data.tolist()))
-                st.toast("Simulerad överföring klar!", icon="🤖")
+                st.toast("Simulerad överföring och avkodning klar!", icon="🤖")
                 
             else:
                 # --- RIKTIG HÅRDVARA (MAIN-TRÅDNING) ---
@@ -171,7 +196,7 @@ with col_tx:
                     try:
                         res_bits, res_raw = receive_continuous(
                             step_time=step_time_input, channel="Dev1/ai0", 
-                            threshold=3.0, timeout_s=timeout_s, ready_event=redo
+                            threshold=decode_threshold, timeout_s=timeout_s, ready_event=redo
                         )
                         motagna_resultat.append((res_bits, res_raw))
                     except Exception as e:
@@ -243,29 +268,34 @@ with col_tx:
                 tx_volts.extend([v, v])
             tx_df = pd.DataFrame({"Tid (s)": tx_times, "Spänning (V)": tx_volts}).set_index("Tid (s)")
             
-            # Skapa graf Mottagare (Verklig eller simulerad rådata)
+            # Skapa graf Mottagare
             if raw_data:
                 sampel_per_bit = max(25, int(round(5000 * step_time_input)))
                 sample_rate = sampel_per_bit / step_time_input
                 rx_times = np.arange(len(raw_data)) / sample_rate
-                rx_df = pd.DataFrame({"Time (s)": rx_times, "Voltage (V)": raw_data}).set_index("Time (s)")
+                rx_df = pd.DataFrame({
+                    "Tid (s)": rx_times, 
+                    "Signal (V)": raw_data,
+                    "Tröskelvärde (V)": [decode_threshold] * len(raw_data)
+                }).set_index("Tid (s)")
             else:
                 rx_df = None
             
-            # Spara state
+            # Spara state (LADE TILL 'decode_threshold' HÄR!)
             st.session_state.history = {
                 "original_text": original_text,
                 "tx_bits": tx_bits_full,
                 "tx_df": tx_df,
                 "rx_df": rx_df,
                 "rx_bits": rx_bits,
-                "rx_text": rx_text
+                "rx_text": rx_text,
+                "decode_threshold": decode_threshold
             }
 
     if st.session_state.history:
         st.subheader("Skickade Bitar (inkl. start/stopp)")
         st.code(st.session_state.history["tx_bits"])
-        st.subheader("Styrsignal till LC-cell (Volt)")
+        st.subheader("Styrsignal till LC-cell (V)")
         st.line_chart(st.session_state.history["tx_df"], color="#ff4b4b")
 
 # ---------------------------------------------------------
@@ -286,10 +316,10 @@ with col_rx:
         st.subheader("Mottagna Bitar (ren data)")
         st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
         
-        st.subheader("Fotodetektorns Utsignal (Volt)")
+        st.subheader("Fotodetektorns Utsignal")
         if data["rx_df"] is not None:
-            # Nu plotts den riktiga analoga mätningen med rätt tidsaxel
-            st.line_chart(data["rx_df"], color="#21c354")
+            # plottar den riktiga analoga mätningen (Grön) och tröskelvärdet (Orange/Röd)
+            st.line_chart(data["rx_df"], color=["#21c354", "#ffaa00"])
         else:
             st.info("Ingen graf att visa.")
             
@@ -301,6 +331,7 @@ with col_rx:
             f"Step time (s/bit): {step_time_input:.5f}\n"
             f"Sample rate (bit/s): {1.0 / step_time_input:.2f}\n"
             f"Extra time (s): {extra_time_input:.2f}\n"
+            f"Threshold (V): {data.get('decode_threshold', st.session_state.threshold_val):.2f}\n"
             f"Sent message converted to bits (incl seq): {data['tx_bits']}\n"
             f"Received bits (excl seq): {data['rx_bits']}\n"
             f"Decoded received message: {data['rx_text']}\n"
