@@ -378,10 +378,13 @@ with col_tx:
         st.code(st.session_state.history["tx_bits"])
         
         if not st.session_state.history.get("is_file_transfer", False):
+            st.subheader("Skickade Bitar (inkl. start/stopp)")
+            st.code(st.session_state.history["tx_bits"])
+
             st.subheader("Styrsignal till LC-cell (V)")
             st.line_chart(st.session_state.history["tx_df"], color="#ff4b4b")
         else:
-            st.info("ℹ️ Grafer är inaktiverade vid filöverföring för att undvika lagg.")
+            st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
 
 # ---------------------------------------------------------
 # 4. MOTTAGARSIDAN
@@ -408,13 +411,16 @@ with col_rx:
         
         st.subheader("Fotodetektorns Utsignal")
         if not data.get("is_file_transfer", False):
+
+            st.subheader("Mottagna Bitar (ren data)")
+            st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
+
             if data["rx_df"] is not None:
                 st.line_chart(data["rx_df"], color=["#21c354", "#ffaa00"])
             else:
                 st.info("Ingen graf att visa.")
 
-            st.subheader("Mottagna Bitar (ren data)")
-            st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
+
 
         else:
             st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
