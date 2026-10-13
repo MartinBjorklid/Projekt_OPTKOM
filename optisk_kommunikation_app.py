@@ -415,8 +415,12 @@ with col_rx:
                 st.line_chart(data["rx_df"], color=["#21c354", "#ffaa00"])
             else:
                 st.info("Ingen graf att visa.")
+
+            st.subheader("Mottagna Bitar (ren data)")
+            st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
+
         else:
-            st.info("ℹ️ Grafer är inaktiverade vid filöverföring för att undvika lagg.")
+            st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
             
         txt_log_content = (
             "--- OPTKOM MESSAGE LOG ---\n\n"
