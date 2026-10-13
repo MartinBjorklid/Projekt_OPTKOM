@@ -374,9 +374,6 @@ with col_tx:
             }
 
     if st.session_state.history:
-        st.subheader("Skickade Bitar (inkl. start/stopp)")
-        st.code(st.session_state.history["tx_bits"])
-        
         if not st.session_state.history.get("is_file_transfer", False):
             st.subheader("Skickade Bitar (inkl. start/stopp)")
             st.code(st.session_state.history["tx_bits"])
