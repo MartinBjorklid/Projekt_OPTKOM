@@ -405,9 +405,6 @@ with col_rx:
             st.success(f"**{data['rx_text']}**")
         else:
             st.error(f"**{data['rx_text']}**")
-            
-        st.subheader("Mottagna Bitar (ren data)")
-        st.code(data["rx_bits"] if data["rx_bits"] else "Inga bitar")
         
         st.subheader("Fotodetektorns Utsignal")
         if not data.get("is_file_transfer", False):
