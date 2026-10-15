@@ -1,7 +1,4 @@
-# Projekt_OPTKOM Interface
-
->[!NOTE]
->Oddsen att denna kod funkar utan felsökning är typ noll och därför ligger den här koden här...
+# Projekt_OPTKOM file-transfer
 
 ## Installation
 1. Installera python
