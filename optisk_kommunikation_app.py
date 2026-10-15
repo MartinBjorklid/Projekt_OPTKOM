@@ -331,6 +331,19 @@ with col_tx:
             else:
                 rx_text = "[Ingen data mottogs]"
             
+            # Rådata från fotodetektorn sparas för CSV-export vid både text och fil
+            if raw_data:
+                sampel_per_bit = max(25, int(round(5000 * step_time_input)))
+                sample_rate = sampel_per_bit / step_time_input
+                rx_times = np.arange(len(raw_data)) / sample_rate
+                rx_df = pd.DataFrame({
+                    "Tid (s)": rx_times, 
+                    "Signal (V)": raw_data,
+                    "Tröskelvärde (V)": [decode_threshold] * len(raw_data)
+                }).set_index("Tid (s)")
+            else:
+                rx_df = None
+            
             # Skapa grafer ENDAST om det inte är en filöverföring (för att undvika lagg)
             if not is_file_transfer:
                 tx_times = []
@@ -342,21 +355,8 @@ with col_tx:
                     tx_times.extend([t_start, t_end])
                     tx_volts.extend([v, v])
                 tx_df = pd.DataFrame({"Tid (s)": tx_times, "Spänning (V)": tx_volts}).set_index("Tid (s)")
-                
-                if raw_data:
-                    sampel_per_bit = max(25, int(round(5000 * step_time_input)))
-                    sample_rate = sampel_per_bit / step_time_input
-                    rx_times = np.arange(len(raw_data)) / sample_rate
-                    rx_df = pd.DataFrame({
-                        "Tid (s)": rx_times, 
-                        "Signal (V)": raw_data,
-                        "Tröskelvärde (V)": [decode_threshold] * len(raw_data)
-                    }).set_index("Tid (s)")
-                else:
-                    rx_df = None
             else:
                 tx_df = None
-                rx_df = None
             
             # Bygg logg och CSV EN gång vid mottagning, så att tidsstämpel och
             # inställningar frysts från sändningstillfället och inte ändras vid omkörning
@@ -385,7 +385,7 @@ with col_tx:
                 "original_text": original_text,
                 "tx_bits": tx_bits_full,
                 "tx_df": tx_df,
-                "rx_df": rx_df,
+                "rx_df": rx_df if not is_file_transfer else None,
                 "rx_bits": rx_bits,
                 "rx_text": rx_text,
                 "decode_threshold": decode_threshold,
@@ -403,7 +403,7 @@ with col_tx:
             st.subheader("Styrsignal till LC-cell (V)")
             st.line_chart(st.session_state.history["tx_df"], color="#ff4b4b")
         else:
-            st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
+            st.info("ℹ️ Grafer och rådata visas inte vid filöverföring för att undvika lagg. Rådatan kan laddas ner som CSV.")
 
 # ---------------------------------------------------------
 # 4. MOTTAGARSIDAN
@@ -442,7 +442,7 @@ with col_rx:
 
 
         else:
-            st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
+            st.info("ℹ️ Grafer och rådata visas inte vid filöverföring för att undvika lagg. Rådatan kan laddas ner som CSV.")
 
         # Logg och CSV byggdes vid mottagning - här används bara den sparade datan
         st.markdown("### Nedladdning av data")
