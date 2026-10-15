@@ -358,8 +358,30 @@ with col_tx:
                 tx_df = None
                 rx_df = None
             
+            # Bygg logg och CSV EN gång vid mottagning, så att tidsstämpel och
+            # inställningar frysts från sändningstillfället och inte ändras vid omkörning
+            rx_tidpunkt = dt.datetime.now()
+            txt_log_content = (
+                "--- OPTKOM MESSAGE LOG ---\n\n"
+                f"Timestamp: {rx_tidpunkt.strftime('%Y-%m-%d %H:%M:%S')}\n"
+                f"Sent message: {original_text}\n"
+                f"Simulated hardware: {'Yes' if simulate_hw else 'No'}\n"
+                f"Step time (s/bit): {step_time_input:.5f}\n"
+                f"Sample rate (bit/s): {1.0 / step_time_input:.2f}\n"
+                f"Extra time (s): {extra_time_input:.2f}\n"
+                f"Threshold (V): {decode_threshold:.2f}\n"
+                f"Sent message converted to bits (incl seq): {tx_bits_full}\n"
+                f"Received bits (excl seq): {rx_bits}\n"
+                f"Decoded received message: {rx_text}\n"
+                f"Error in decoding: {'Yes' if rx_text != original_text else 'No'}\n"
+            )
+            csv_bytes = rx_df.to_csv(index=True).encode('utf-8') if rx_df is not None else None
+
             # Spara state
             st.session_state.history = {
+                "timestamp_str": rx_tidpunkt.strftime('%Y-%m-%d_%H-%M-%S'),
+                "txt_log_bytes": txt_log_content.encode('utf-8'),
+                "csv_bytes": csv_bytes,
                 "original_text": original_text,
                 "tx_bits": tx_bits_full,
                 "tx_df": tx_df,
@@ -421,41 +443,27 @@ with col_rx:
 
         else:
             st.info("ℹ️ Grafer och rådata är inaktiverade vid filöverföring för att undvika lagg.")
-            
-        txt_log_content = (
-            "--- OPTKOM MESSAGE LOG ---\n\n"
-            f"Timestamp: {dt.datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"Sent message: {data['original_text']}\n"
-            f"Simulated hardware: {'Yes' if simulate_hw else 'No'}\n"
-            f"Step time (s/bit): {step_time_input:.5f}\n"
-            f"Sample rate (bit/s): {1.0 / step_time_input:.2f}\n"
-            f"Extra time (s): {extra_time_input:.2f}\n"
-            f"Threshold (V): {data.get('decode_threshold', st.session_state.threshold_val):.2f}\n"
-            f"Sent message converted to bits (incl seq): {data['tx_bits']}\n"
-            f"Received bits (excl seq): {data['rx_bits']}\n"
-            f"Decoded received message: {data['rx_text']}\n"
-            f"Error in decoding: {'Yes' if data['rx_text'] != data['original_text'] else 'No'}\n"
-        )
-        
+
+        # Logg och CSV byggdes vid mottagning - här används bara den sparade datan
         st.markdown("### Nedladdning av data")
         col_btn1, col_btn2 = st.columns(2)
-        
+
         with col_btn1:
-            st.download_button(
-                label="📄 Spara textlogg (.txt)",
-                data=txt_log_content.encode('utf-8'),
-                file_name=f"sent-message-log-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.txt",
-                mime="text/plain",
-                use_container_width=True
-            )
-            
+            if data.get("txt_log_bytes") is not None:
+                st.download_button(
+                    label="📄 Spara textlogg (.txt)",
+                    data=data["txt_log_bytes"],
+                    file_name=f"sent-message-log-{data['timestamp_str']}.txt",
+                    mime="text/plain",
+                    use_container_width=True
+                )
+
         with col_btn2:
-            if data["rx_df"] is not None:
-                csv_data = data["rx_df"].to_csv(index=True).encode('utf-8')
+            if data.get("csv_bytes") is not None:
                 st.download_button(
                     label="📊 Spara analog rådata (.csv)",
-                    data=csv_data,
-                    file_name=f"raw-data-{dt.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.csv",
+                    data=data["csv_bytes"],
+                    file_name=f"raw-data-{data['timestamp_str']}.csv",
                     mime="text/csv",
                     use_container_width=True
                 )
