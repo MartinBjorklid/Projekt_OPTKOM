@@ -20,9 +20,9 @@
   Detta görs via körning av följande kommando: ```pip install [paket]```.
   
   >[!TIP]
-  >Om det inte funkar med ```pip install [paket]``` så får du använda ```python3 -m pip install [paket]``` och ```[paket]``` byts självklart ut mot det faktiska paketet som du ska installera, t.ex ```numpy```
+  >Om det inte funkar med ```pip install [paket]``` så får du använda ```python3 -m pip install [paket]``` och ```[paket]``` byts självklart ut mot det faktiska paketet som du ska installera, t.ex. ```numpy```
 
-## Användning av komunikationssystemet
+## Användning av kommunikationssystemet
 
 ### 
 
@@ -77,13 +77,13 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |13|Se [förklaring](#n13)|
 |16|Se [förklaring](#n16)|
 |<a id="n19"></a>19|Visar hela eller början (beroende på längd) på den skickade datan i bitar|
-|<a id="n20"></a>20|Graf över skickade signalen till LC-cell|
+|<a id="n20"></a>20|Graf över den skickade signalen till LC-cell|
 |<a id="n26"></a>26|Visar mottaget avkodat meddelande, 🟩 grönt om korrekt överföring, 🟥 rött om felaktig överföring|
 |<a id="n29"></a>29|Visar antalet fel som Hamming-kodningen rättade samt antalet bitfel som den inte lyckades rätta|
 |<a id="n32"></a>32|Visar hela eller början (beroende på längd) på den mottagna datan (exklusive start/stop) i bitar|
-|<a id="n33"></a>33|Graf över fotodetektorns utsignal, för markeringar i graf se [röda markeringar](#n36) och [blåa markeringar](#n35)|
+|<a id="n33"></a>33|Graf över fotodetektorns utsignal, för markeringar i graf se [röda markeringar (36)](#n36) och [blå markeringar (35)](#n35)|
 |<a id="n34"></a>34|Linje som visar tröskelvärdet för mottagen signal (se [5](#n5))|
-|<a id="n38"></a>38| Text som visar och förklarar [röda markeringar](#n36) och [Blåa markeringar](#n35) samt överblivna [bitfel](#n29)|
+|<a id="n38"></a>38| Text som visar och förklarar [röda markeringar (36)](#n36) och [Blå markeringar (35)](#n35) samt överblivna [bitfel (29)](#n29)|
 
 <p align="center">
   <img src="doc/error_in_message.png" alt="A view of the interface after a sent message with errors">
@@ -97,7 +97,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |32|Se [förklaring](#n32)|
 |33|Se [förklaring](#n33)|
 |34|Se [förklaring](#n34)|
-|<a id="n35"></a>35|Blåa markeringar i grafen som visar att Hamming-kodningen rättade ett fel där|
+|<a id="n35"></a>35|Blå markeringar i grafen som visar att Hamming-kodningen rättade ett fel där|
 |<a id="n36"></a>36|Röda markeringar i grafen som visar att det finns ett fel kvar där|
 |37|Förklaring till graf|
 |38|Se [förklaring](#n38)|
@@ -114,13 +114,13 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |11|Se [förklaring](#n11)|
 |12|Se [förklaring](#n12)|
 |13|Se [förklaring](#n13)|
-|14|Visar namn och storlek på uppladdad fil|
-|15|Knapp för att ta bort uppladdad fil|
+|<a id="n14"></a>14|Visar namn och storlek på uppladdad fil|
+|<a id="n15"></a>15|Knapp för att ta bort uppladdad fil|
 |16|Se [förklaring](#n16)|
 |17|Animerad ladd-symbol med text som visar att en signal skickas (antingen över laser eller i simuleringsläge)|
 |18|Förloppsindikator som visar förloppet på datan som skickas|
-|24|Förloppsindikator som visar förloppet på datan som mottags|
-|25|Vid sändning av okomprimerade bildformat som ```.bmp``` filer så visas mottagandet av bilden i realtid|
+|24|Förloppsindikator som visar förloppet på datan som mottas|
+|<a id="n25"></a>25|Vid sändning av okomprimerade bildformat som ```.bmp``` filer så visas mottagandet av bilden i realtid|
 
 <p align="center">
   <img src="doc/error_in_picture.png" alt="A view of the interface after the sending of a picture that wasn't received correctly">
@@ -132,12 +132,12 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |13|Se [förklaring](#n13)|
 |14|Se [förklaring](#n14)|
 |15|Se [förklaring](#n15)|
-|16|Se [förklaring](#n17)|
-|21||
-|22||
+|16|Se [förklaring](#n16)|
+|21|Visar bilden som skickats|
+|22|Dropdown som visar graf och inledande bitar, såsom [19](#n19) och [20](#n20), samma sak finns för mottagarsidan|
 |25|Se [förklaring](#n25)|
-|27||
-|28|
-|29|
-|30|
-|31|
+|27|Visar antalet bytes som skiljer sig från sändarsidan och antalet bitfel som har orsakat detta, om inget är fel så är rutan 🟩 grön, vid fel blir den 🟥 röd|
+|28|Genererar SHA-256 hashes för både skickad fil och mottagen fil, om dessa stämmer överens så skedde överföringen förlustfritt|
+|29|Se [förklaring](#n29)|
+|30|Visar tydligt vilka pixlar vars data har blivit skadad under överföring i 🟥 rött samt visar även skadade paletter i 🟨 gult|
+|31|Knapp för att ladda ned den mottagna filen, eventuella bitfel inkluderas även där|
