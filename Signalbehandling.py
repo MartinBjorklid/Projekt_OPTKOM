@@ -132,30 +132,45 @@ def encode(compressed_bit):
     return encoded_bits, H, padding
 
 
-def decode(encoded_bits, H, padding):
+def hamming_correct(encoded_bits, H):
     """
-    Decodes and error corrects data that has been coded with hamming code (7,4)
-    \nCalculates syndrome and corrects if wrong (1 bit only)
-    \nremoves parity bits and padding after decoding and error correction.
+    Corrects single bit errors in each hamming (7,4) block.
+    
+Returns the corrected codewords as a (blocks, 7) matrix and the
+    
+positions in encoded_bits of the bits that were flipped.
     """
     #r has shape (900/4,7)
     r = np.asarray(encoded_bits, dtype=int).reshape(-1,7).copy()
     #s has shape (900/4,3)
     s = ((H@r.T)%2).T
-    H_columns = H.T
-    error_index = []
-    for block_index,syndrome in enumerate(s):
-        if syndrome.any():
-            for seq_index,col in enumerate(H_columns):
-                if np.array_equal(syndrome,col):
-                    error_index.append([block_index,seq_index])
-                    print(f"Error fixed at row,col {block_index,seq_index}")
-                    r[block_index,seq_index] ^= 1
-                    break
+    # Every nonzero syndrome equals exactly one column of H -> that bit is wrong.
+    # Syndromes and columns are turned into numbers 1-7 so all blocks are corrected at once.
+    weights = np.array([4, 2, 1])
+    column_of_syndrome = np.full(8, -1)
+    column_of_syndrome[H.T @ weights] = np.arange(7)
+    error_columns = column_of_syndrome[s @ weights]
+    error_blocks = np.nonzero(error_columns >= 0)[0]
+    r[error_blocks, error_columns[error_blocks]] ^= 1
+    return r, error_blocks * 7 + error_columns[error_blocks]
+
+
+def decode(encoded_bits, H, padding, verbose=True, return_corrections=False):
+    """
+    Decodes and error corrects data that has been coded with hamming code (7,4)
+    \nCalculates syndrome and corrects if wrong (1 bit only)
+    \nremoves parity bits and padding after decoding and error correction.
+    \nreturn_corrections=True also returns the number of corrected bits.
+    """
+    r, corrected_positions = hamming_correct(encoded_bits, H)
+    if verbose and len(corrected_positions) > 0:
+        print(f"Hamming: fixed {len(corrected_positions)} errors")
     k = r[:,:4]
     decoded_data = k.ravel().tolist()
     if padding > 0:
         decoded_data = decoded_data[:-padding]
+    if return_corrections:
+        return decoded_data, len(corrected_positions)
     return decoded_data
 
 
@@ -163,7 +178,11 @@ def decode(encoded_bits, H, padding):
 # 3. Gör bits till text
 # ============================================================
 
-def huffman_decode(bits, tree):
+def huffman_decode(bits, tree, allow_incomplete=False):
+    """
+    allow_incomplete=True ignorerar ett ofullständigt sista tecken
+    (används när texten visas medan den fortfarande tas emot).
+    """
 
     result = []
     node = tree
@@ -191,7 +210,7 @@ def huffman_decode(bits, tree):
 
     # Om vi inte är tillbaka vid roten är bitsträngen
     # ofullständig
-    if node != tree:
+    if node != tree and not allow_incomplete:
         raise ValueError(
             "Ofullständig Huffman-bitsträng."
         )

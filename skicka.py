@@ -1,4 +1,5 @@
 import sys
+import time
 import matplotlib.pyplot as plt
 from Signalbehandling import huffman_encode, codes, tree, huffman_decode
 
@@ -6,9 +7,20 @@ Start_seq = [1, 1, 1, 1, 0, 0]
 Slut_seq = [1, 0, 1, 1, 1, 0, 0, 1, 1, 0, 1, 1, 1]
 step_time = 0.004
 
-def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0"):
+AVSLUTNINGSBIT = 0
+
+def lagg_till_avslutningsbit(nyttobitar):
+    """Lägger till avslutningsbiten efter Hamming-kodad nyttodata. Mottagaren tar bort den."""
+    n = len(Slut_seq)
+    if any(nyttobitar[i:i + n] == Slut_seq for i in range(len(nyttobitar) - n + 1)):
+        # Kan bara hända om slutsekvensen eller Hamming-koden har ändrats
+        raise ValueError("Slutsekvensen förekommer i nyttodatan. Välj en annan slutsekvens.")
+    return list(nyttobitar) + [AVSLUTNINGSBIT]
+
+def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/ao0", stop_event=None):
     """
     Skickar en lista med 0/1 till NI USB-6003 med HÅRDVARUKLOCKA.
+    Om stop_event sätts avbryts sändningen och utgången nollställs.
     """
     # Lokal import: Kraschar inte om man kör i simuleringsläget utan nidaqmx installerat
     import nidaqmx 
@@ -41,8 +53,18 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
 
             task.write(voltages, auto_start=True)
 
+            # Vänta i korta steg i stället för wait_until_done, så att sändningen
+            # kan avbrytas (t.ex. om gränssnittet laddas om mitt i en överföring)
             timeout_sekunder = (len(voltages) * step_time) + 5.0
-            task.wait_until_done(timeout=timeout_sekunder)
+            deadline = time.monotonic() + timeout_sekunder
+            while not task.is_task_done():
+                if stop_event is not None and stop_event.is_set():
+                    task.stop()
+                    print("Sändning avbruten!")
+                    return
+                if time.monotonic() > deadline:
+                    raise TimeoutError("Sändningen blev inte klar i tid.")
+                time.sleep(0.05)
             
             print("Sändning klar!")
 

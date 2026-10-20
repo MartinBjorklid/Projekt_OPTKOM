@@ -1,0 +1,2 @@
+Hej!
+Detta meddelande skickades med laser genom en lc-cell och togs emot av en fotodetektor.

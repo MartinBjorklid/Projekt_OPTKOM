@@ -2,6 +2,11 @@ import time
 import numpy as np
 from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
 
+def berakna_sampel_per_bit(step_time):
+    """Antal AI-sampel per bit som mottagaren (och simuleringen) använder."""
+    return max(25, int(round(5000 * step_time)))
+
+
 class SynkadBitavkodare:
     """Tar emot en ström av AI-sampel och avläser bitar i deras mitt."""
 
@@ -61,7 +66,13 @@ class SynkadBitavkodare:
 
 
 def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
-                       threshold=2.3, timeout_s=15.0, ready_event=None):
+                       threshold=2.3, timeout_s=15.0, ready_event=None,
+                       avkodare=None, stop_event=None):
+    """
+    avkodare: en SynkadBitavkodare som anroparen skapat. Då kan anroparen läsa
+              avkodare.payload under mottagningen och visa data medan den kommer in.
+    stop_event: om den sätts avbryts mottagningen.
+    """
     
     # Lokal import: Kraschar inte om man kör i simuleringsläget utan nidaqmx installerat
     import nidaqmx
@@ -70,12 +81,13 @@ def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
     if step_time <= 0:
         raise ValueError("step_time måste vara positiv.")
     
-    sampel_per_bit = max(25, int(round(5000 * step_time)))
+    sampel_per_bit = berakna_sampel_per_bit(step_time)
     sample_rate = sampel_per_bit / step_time
     if sample_rate > 100_000:
         raise ValueError("För kort bittid för denna DAQ.")
 
-    avkodare = SynkadBitavkodare(sampel_per_bit, threshold)
+    if avkodare is None:
+        avkodare = SynkadBitavkodare(sampel_per_bit, threshold)
     deadline = time.monotonic() + timeout_s
     print(f"Lyssnar på {channel}: {sample_rate:.0f} sampel/s")
 
@@ -96,6 +108,9 @@ def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
                 ready_event.set()
 
             while time.monotonic() < deadline:
+                if stop_event is not None and stop_event.is_set():
+                    print("Mottagning avbruten.")
+                    break
                 block = task.read(
                     number_of_samples_per_channel=max(sampel_per_bit, int(sample_rate * 0.02)),
                     timeout=2.0,
