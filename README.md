@@ -17,7 +17,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
   * watchdog (ej obligatorisk, ger bättre prestanda)
 
 >[!NOTE]
->Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som inte kör windows. 
+>Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som till exempel inte kör windows. 
   
   Detta görs via körning av följande kommando: ```pip install [paket]```.
   
