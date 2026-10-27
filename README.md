@@ -144,7 +144,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 
 ### Procedurer
 >[!CAUTION]
->### Säkerhetsföreskrifter
+>#### Säkerhetsföreskrifter
 >Följande säkerhetsföreskrifter är hämtade ordagrant ur IFM:s interna
 >dokument "Laser" [^1]:
 >
