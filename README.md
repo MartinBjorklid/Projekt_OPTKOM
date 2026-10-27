@@ -1,5 +1,7 @@
 # Projekt_OPTKOM
+Detta är koden för projektet optisk kommunikation i kursen TFYY51 Ingenjörsprojekt.
 
+Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signalen med hjälp av fotodetektorn. Kommunikationen ska även genomföras på ett användarvänligt sätt.
 ## Installation
 1. Installera python
   - Gå in på https://www.python.org/ och installera python
@@ -24,8 +26,6 @@
 
 ## Användning av kommunikationssystemet
 
-### 
-
 Programmet startas genom att köra:
 ```streamlit run /[path to folder]/optisk_kommunikation_app.py```
 
@@ -34,7 +34,7 @@ Programmet startas genom att köra:
 
 Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 
-### Använda programmet
+### Introduktion användargränssnitt
 
 <p align="center">
   <img src="doc/overview.png" alt="Overview of interface">
@@ -141,3 +141,45 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |29|Se [förklaring](#n29)|
 |30|Visar tydligt vilka pixlar vars data har blivit skadad under överföring i 🟥 rött samt visar även skadade paletter i 🟨 gult|
 |31|Knapp för att ladda ned den mottagna filen, eventuella bitfel inkluderas även där|
+
+### Procedurer
+>[!CAUTION]
+>### Säkerhetsföreskrifter
+>Följande säkerhetsföreskrifter är hämtade ordagrant ur IFM:s interna
+>dokument "Laser" [^1]:
+>
+>1. Använd skyddsglasögon.
+>2. Titta ej direkt in i laserstrålen.
+>3. Titta ej i laserstråle reflekterad mot spekulär (blank) yta.
+>4. Varna samtliga i rummet varje gång lasern tänds.
+>5. Använd lasern endast när det krävs. 
+>6. Den person som riktar/riktar om laserstrålen måste tillse att ingen annan person 
+>riskerar att kunna få laserstrålen direkt mot ögonen eller reflekterad mot spekulär yta.
+>7. Varje gång någon inför någonting (oavsett om det är reflekterande eller inte) i 
+>laserstrålen måste samtliga i rummet varnas och ges tid att titta bort/skydda ögonen.
+
+[^1]: Linköpings universitet, Institutionen för fysik, kemi och biologi (IFM),
+"Laser," internt dokument, 2020-09-28, unpublished.
+
+
+
+#### Skicka meddelande
+För att skicka data i form av ett meddelande via [meddelande-rutan (11)](#n11) gör man på följande vis:
+
+1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning)
+
+#### Skicka fil
+
+#### Simulera sändning av data
+
+#### Ändra inställningar och parametrar för sändning
+
+#### Inspektera styrsignal och mottagen signal i grafer
+
+#### Ladda ned logg och data från sändning
+
+
+
+
+
+
