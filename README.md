@@ -166,9 +166,17 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 #### Skicka meddelande
 För att skicka data i form av ett meddelande via [meddelande-rutan (11)](#n11) gör man på följande vis:
 
-1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning)
+1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning), se [Simulera sändning av data](#simulera-sändning-av-data)
+2. Skriv in ditt meddelande i [meddelande-rutan (11)](#n11)
+3. Skicka meddelandet genom att trycka på ["Skicka Data"-knappen (16)](#n16)
+4. Se det mottagna meddelandet under ["Slutgiltigt mottaget meddelande/fil" (26)](#n26), du kan även se de råa bitarna som mottagits under ["Mottagna bitar" (32)](#n32). För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
 
 #### Skicka fil
+För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (12)](#n12) gör man på följande vis:
+
+1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning), se [Simulera sändning av data](#simulera-sändning-av-data)
+2. Ladda upp filen som du vill skicka genom att trycka på [uppladdnings-knappen (13)](#n13) och välj filen i utforskaren
+3. Skicka filen genom att trycka på ["Skicka Data"-knappen (16)](#n16)
 
 #### Simulera sändning av data
 
