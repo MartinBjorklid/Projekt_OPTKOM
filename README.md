@@ -139,7 +139,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |<a id="n27"></a>27|Visar antalet bytes som skiljer sig från sändarsidan och antalet bitfel som har orsakat detta, om inget är fel så är rutan 🟩 grön, vid fel blir den 🟥 röd|
 |<a id="n28"></a>28|Genererar SHA-256 hashes för både skickad fil och mottagen fil, om dessa stämmer överens så skedde överföringen förlustfritt|
 |29|Se [förklaring](#n29)|
-|30|Visar tydligt vilka pixlar vars data har blivit skadad under överföring i 🟥 rött samt visar även skadade paletter i 🟨 gult|
+|<a id="n30"></a>30|Visar tydligt vilka pixlar vars data har blivit skadad under överföring i 🟥 rött samt visar även skadade paletter i 🟨 gult|
 |31|Knapp för att ladda ned den mottagna filen, eventuella bitfel inkluderas även där|
 
 ### Procedurer
@@ -179,7 +179,7 @@ För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (12)](#n12
 3. Skicka filen genom att trycka på ["Skicka Data"-knappen (16)](#n16)
 4. Bevaka sändnings- och mottagningsprocessen genom att titta på förloppsindikatorerna [(18)](#n18) och [(24)](#n24), om det skickas okoromprimerade filer som användargränssnittet kan hantera, såsom ```.bmp``` eller ```.txt``` filer så återskapas dom i realtid på användargränssnittet [(25)](#n25).
 5. När sändningen är klar kan du se om det har skett sändningsfel som ej kunde korrigeras genom att jämföra [SHA-256 hasharna (28)](#n28) och se antalet bitfel som kvarstår i rutan ovanför [(27)](#n27)
-6. Mottagen fil kommer om möjligt [förhandsvisas (25)](#n25) och går att jämföra med [skickad fil (21)](#n21)
+6. Mottagen fil kommer om möjligt [förhandsvisas (25)](#n25) och går att jämföra med [skickad fil (21)](#n21), vid sändning av t.ex. ```.bmp```-bilder så kommer även det finnas en bild som visar skillnader mellan skickad bild och mottagen bild [(30)](#n30)
 
 #### Simulera sändning av data
 
