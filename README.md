@@ -56,15 +56,15 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |Nummer|Beskrivning|
 |---|---|
 |1|Öppnar/stänger Debug-menyn där man kan ändra inställningar och komma åt avancerade funktioner|
-|2|Fält för att ändra tiden mellan två bitar och därmed överföringshastigheten i s/bit (ändrar fält 4)|
-|3|Fält för att ändra hur mycket tid av "nollor" som läggs till i slutet av signalen|
-|4|Fält för att ändra överföringshastigheten i bit/s (ändrar fält 2)|
+|<a id="n2"></a>2|Fält för att ändra tiden mellan två bitar och därmed överföringshastigheten i s/bit (ändrar fält 4)|
+|<a id="n3"></a>3|Fält för att ändra hur mycket tid av "nollor" som läggs till i slutet av signalen|
+|<a id="n4"></a>4|Fält för att ändra överföringshastigheten i bit/s (ändrar fält 2)|
 |<a id="n5"></a>5|Fält för att ändra tröskelvärdet för vad som tolkas som en etta och nolla|
-|6|Slider för att aktivera/avaktivera simuleringsläget som simulerar att skicka data med givna parametrar, med simuleringsläget på krävs ej biblioteket nidaqmx|
-|7|Fält för att ändra mängden simulerade bitfel (funkar endast i simuleringsläget)|
+|<a id="n6"></a>6|Slider för att aktivera/avaktivera simuleringsläget som simulerar att skicka data med givna parametrar, med simuleringsläget på krävs ej biblioteket nidaqmx|
+|<a id="n7"></a>7|Fält för att ändra mängden simulerade bitfel (funkar endast i simuleringsläget)|
 |8|Hjälp-tips som förklarar hur simulerade bitfel funkar|
-|9|Fält för att skriva in manuella bitsekvenser|
-|10|Knapp för att skicka bitsekvensen som har skrivits in i fält 9|
+|<a id="n9"></a>9|Fält för att skriva in manuella bitsekvenser|
+|<a id="n10"></a>10|Knapp för att skicka bitsekvensen som har skrivits in i fält 9|
 
 <p align="center">
   <img src="doc/sent_message.png" alt="A view of the interface after a sent message">
@@ -169,7 +169,8 @@ För att skicka data i form av ett meddelande via [meddelande-rutan (11)](#n11) 
 1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning), se [Simulera sändning av data](#simulera-sändning-av-data)
 2. Skriv in ditt meddelande i [meddelande-rutan (11)](#n11)
 3. Skicka meddelandet genom att trycka på ["Skicka Data"-knappen (16)](#n16)
-4. Se det mottagna meddelandet under ["Slutgiltigt mottaget meddelande/fil" (26)](#n26), du kan även se de råa bitarna som mottagits under ["Mottagna bitar" (32)](#n32). För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
+4. Se det mottagna meddelandet under ["Slutgiltigt mottaget meddelande/fil" (26)](#n26), du kan även se de råa bitarna som mottagits under ["Mottagna bitar" (32)](#n32)
+5. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
 
 #### Skicka fil
 För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (12)](#n12) gör man på följande vis:
@@ -180,13 +181,42 @@ För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (12)](#n12
 4. Bevaka sändnings- och mottagningsprocessen genom att titta på förloppsindikatorerna [(18)](#n18) och [(24)](#n24), om det skickas okoromprimerade filer som användargränssnittet kan hantera, såsom ```.bmp``` eller ```.txt``` filer så återskapas dom i realtid på användargränssnittet [(25)](#n25).
 5. När sändningen är klar kan du se om det har skett sändningsfel som ej kunde korrigeras genom att jämföra [SHA-256 hasharna (28)](#n28) och se antalet bitfel som kvarstår i rutan ovanför [(27)](#n27)
 6. Mottagen fil kommer om möjligt [förhandsvisas (25)](#n25) och går att jämföra med [skickad fil (21)](#n21), vid sändning av t.ex. ```.bmp```-bilder så kommer även det finnas en bild som visar skillnader mellan skickad bild och mottagen bild [(30)](#n30)
+7. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
 
 #### Simulera sändning av data
+För att simulera sändning av data om man till exempel inte har hårdvaran närvarande eller inte kan installera biblioteket ```nidaqmx``` så gör man som följande:
+
+1. Öppna [debug-menyn (1)](#n1)
+2. Sätt igång simuleringsläget om det är av (standard är av vid start av användargränssnitt) genom att trycka på [simulerings-knappen (6)](#n6)
+
+>[!NOTE]
+>Simuleringsinställningen återställs inte mellan körningar men allt återställs vid omladdning av sidan.
+
+För att stänga av simuleringsläget så stänger du bara av simulerings-knappen.
 
 #### Ändra inställningar och parametrar för sändning
+Inställningarna för programmet funkar som dom är från början men kan enkelt ändras via [debug-menyn (1)](#n1).
 
+>[!WARNING]
+>Inställningarna i debug-menyn har standardvärdena av en anledning och att ändra standardvärdena kan orsaka problem vid skarp sändning och även ibland vid simulerad sändning, så bara för att det funkar vid simulerad sändning betyder inte att det kommer funka vid skarp sändning.
+
+- **För att ändra sändningshastigheten**, antingen i form av bitar per sekund eller sekunder per bit, ändrar du rutan [Step Time (2)](#n2) för att ändra i sekunder per bit och rutan [Överföringshastighet (4)](#n4) om du önskar att ändra den i bitar per sekund. 
+
+- **För att ändra tiden med extra nollor på slutet av en sändning** så får man ändra [Extra Time (3)](#n3), en högre extra time kan i vissa fall förbättra tillförlitligheten vid sändningen.
+
+- **För att ändra tröskelvärdet för fotodetektorns utsignal** så får man ändra [Tröskelvärdet (5)](#n5). När utsignalen blir högre än tröskelvärdet tolkas det som en etta, annars en nolla. Så beroende på sändningshastighet och egenskaperna på LC-cellen kan detta behövas justeras.
+
+- **För att simulera bitfel i mottagen signal** kan man ändra värdet på [Simulerade bitfel (7)](#n7). Att lägga till simulerade bitfel är ett bra sätt att testa felkorrigering och tålighet mot fel men funkar endast för simulerad sändning och ett för högt värde kan lätt överväldiga felkorrigeringen och leda till att datan som sänds blir oläsbar.
+
+#### Sändning av manuella bitsträngar
+Sändning av manuella bitsträngar görs via [debug-menyn (1)](#n1).
+
+1. Mata in bitsträngen i rutan under "Manuell Bitsändning" [(9)](#n9)
+2. Tryck på knappen [Skicka Manuella Bitar (10)](#n10)
+3. Bitsträngen skickas nu som en ett [vanligt meddelande](#skicka-meddelande) men avkodas inte då det är en bitsträng  
+   
 #### Inspektera styrsignal och mottagen signal i grafer
-
+För att ta en närmare titt på styrsignalen och mottagen signal så finns det varsin graf för de olika signalerna. Vid sändning av filer är denna 
 #### Ladda ned logg och data från sändning
 
 
