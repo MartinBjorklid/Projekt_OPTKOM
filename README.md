@@ -4,9 +4,10 @@ Detta är koden för projektet optisk kommunikation i kursen TFYY51 Ingenjörspr
 Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signalen med hjälp av fotodetektorn. Kommunikationen ska även genomföras på ett användarvänligt sätt.
 
 ## TODO
-- [ ] Göra klart guide för interface
+- [x] Göra klart guide för interface
 - [ ] Fixa kort guide för hårdvaran
 - [ ] Lägga till trädet för huffman-kodningen i loggen?
+- [ ] Varför är .csv-filen på svenska?!
 
 ## Installation
 1. Installera python
@@ -107,8 +108,8 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |<a id="n36"></a>36|Röda markeringar i grafen som visar att det finns ett fel kvar där|
 |37|Förklaring till graf|
 |38|Se [förklaring](#n38)|
-|39|Knapp för att ladda ner en logg över senast skickade data i ```.txt``` format|
-|40|Knapp för att ladda ner en ```.CSV``` fil som innehåller alla mätvärden från fotodetektorn samt skickad signal|
+|<a id="n39"></a>39|Knapp för att ladda ner en logg över senast skickade data i ```.txt``` format|
+|<a id="n40"></a>40|Knapp för att ladda ner en ```.CSV``` fil som innehåller alla mätvärden från fotodetektorn samt skickad signal|
 
 <p align="center">
   <img src="doc/partial_file_send.png" alt="A view of the interface during the sending of a file">
@@ -237,6 +238,32 @@ För att ta en närmare titt på styrsignalen och mottagen signal så finns det 
 För att ladda ned logg och eller en CSV:n så gör man på följande vis:
 
 1. Efter att data av något slag har skickats så finns två nedladdningsknappar längst ned på mottagarsidan, en för loggen och en för CSV-filen.
+2. Klicka på motsvarande knapp för det som du önskar att ladda ned ([(39)](#n39) och [(40)](#n40))
+3. Hantera nedladdad data på valfritt sätt, förslagsvis anteckningar för ```.txt``` loggen och Excel eller liknande för ```.csv``` filen
+
+>[!NOTE]
+>I Excel så är rubrikraden i ```.csv``` filen korrupt, troligtvis på grund av deras teckenkodningsstandard. Därför kan det vara fördelaktigt att antingen ändra teckenkodningstandarden eller använda ett mer flexibelt program för databehandling.
+
+Filerna har följande innehåll:
+||Logg (```.txt```)| Rådata (```.csv```)|
+|----|----|----|
+|Tid och datum|🟩|🟩| 
+|Namn på skickad och mottagen data|🟩|🟥|
+|Skickat meddelande och mottaget meddelande|🟩|🟥|
+|Visar om datan är simulerad|🟩|🟥|
+|Innehåller överföringshastigheten|🟩|🟥|
+|Innehåller "Extra Time"|🟩|🟥|
+|Innehåller tröskelvärde för signal|🟩|🟩|
+|Innehåller alla skickade och mottagna bitar|🟩|🟥|
+|Innehåller antalet fel som Hammingkodningen förhindrade|🟩|🟥|
+|Innehåller antalet fel som kvarstod efter Hammingkodningen|🟩|🟥|
+|Innehåller storlek på skickad och mottagen fil|🟩|🟥|
+|Innehåller antalet bytes som skadades under sändning|🟩|🟥|
+|Innehåller skickad och mottagen SHA-256 hash|🟩|🟥|
+|Visar om det uppstod fel under avkodning|🟩|🟥|
+|Innehåller alla datapunkter uppfångade av mottagarens ADC med tillhörande tid|🟥|🟩|
+
+
 
 
 
