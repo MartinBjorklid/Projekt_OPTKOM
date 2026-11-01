@@ -2,6 +2,12 @@
 Detta är koden för projektet optisk kommunikation i kursen TFYY51 Ingenjörsprojekt.
 
 Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signalen med hjälp av fotodetektorn. Kommunikationen ska även genomföras på ett användarvänligt sätt.
+
+## TODO
+- [ ] Göra klart guide för interface
+- [ ] Fixa kort guide för hårdvaran
+- [ ] Lägga till trädet för huffman-kodningen i loggen?
+
 ## Installation
 1. Installera python
   - Gå in på https://www.python.org/ och installera python
@@ -216,9 +222,21 @@ Sändning av manuella bitsträngar görs via [debug-menyn (1)](#n1).
 3. Bitsträngen skickas nu som en ett [vanligt meddelande](#skicka-meddelande) men avkodas inte då det är en bitsträng  
    
 #### Inspektera styrsignal och mottagen signal i grafer
-För att ta en närmare titt på styrsignalen och mottagen signal så finns det varsin graf för de olika signalerna. Vid sändning av filer är denna 
-#### Ladda ned logg och data från sändning
+För att ta en närmare titt på styrsignalen och mottagen signal så finns det varsin graf för de olika signalerna. Vid sändning av filer är denna gömd bakom en dropdown för att datan ofta är för stor för att hantera i användargränssnittet, därav rekommenderas det att [ladda ned datan](#ladda-ned-logg-och-data-från-sändning) i detta fall. Då webbläsare får svårt att visa den stora mängd data som samlas in utan att bli oanvändbar på grund av lagg så **begränsas antalet datapunkter i grafer till ca 4000 st**. Även **visningen av ren data begränsas till de första bitarna** vid längre sändningar av samma anledning.
 
+- För att **inspektera styrsignalsgrafen** om man har [skickat ett meddelande](#skicka-meddelande) så visas [grafen (20)](#n20) alltid rakt under sändarsidan, om man istället [skickat en fil](#skicka-fil) så är den gömd längs ned under en dropdown. Y-axeln är spänningen för styrsignalen och X-axeln är tiden i sekunder sedan början av sändning. Vid en amplitud på +-5v på styrsignalen så kommer 0v representera en nolla och både +5v och -5v representera en etta då de ger samma resultat på modulationen av lasern men minskar slitage på LC-cellen.
+
+- För att **inspektera grafen över fotodetektorns utsignal** så, precis som vid sändningsgrafen efter sändning, så är [grafen (33)](#n33) gömd längst ned vid sändning av fil och dyker upp direkt under mottagarsidan vid sändning av meddelande. Y-axeln visar spänningen från fotodetektorn efter transimpedansförstärkaren och går normalt sätt någons stans mellan 0v och +5v. X-axeln visar, som i sändningsgrafen, tid i sekunder sedan början av sändning. Om den mottagna signalen i grönt är över [tröskelvärdet (34)](#n34), som visas sträckat i orange så tolkas det som en etta och om signalen är under tröskelvärdet så tolkas det som en nolla. Om Hammingkodningen rättar ett fel så markeras det i grafen som ett [lodrätt blått sträck (35)](#n35). Om det finns fel som Hammingkodningen inte lyckas rätta så markeras de med ett [rött lodrätt sträck (34)](#n34) i grafen.
+
+>[!NOTE]
+>Datan för att markera med blå och röda lodräta sträck för att visualisera bitfel inte skickas över lasern men detta anses vara lämpligt då datan inte har något med resultatet av en överföring att göra utan endast används för att lättare demonstrera och visualisera systemet. Datan behövs alltså inte för att överföringen ska kunna ske!
+
+- För att **inspektera skickade och mottagna bitar** så hittas de, precis som med graferna efter sändning, antingen under en dropdown vid sändning av filer och direkt på vardera sida vid sändning av meddelande. I rutorna ([(19)](#n19) och [(32)](#n32)) kan början av den skickade/mottagna bitsekvensen inspekteras.
+
+#### Ladda ned logg och data från sändning
+För att ladda ned logg och eller en CSV:n så gör man på följande vis:
+
+1. Efter att data av något slag har skickats så finns två nedladdningsknappar längst ned på mottagarsidan, en för loggen och en för CSV-filen.
 
 
 
