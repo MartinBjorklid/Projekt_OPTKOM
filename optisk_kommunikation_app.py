@@ -14,6 +14,7 @@ from Signalbehandling import huffman_encode, huffman_decode, tree, codes, encode
 from grafer import minmax_utglesning, signalgraf, bitstrang
 from filvisning import (bitar_till_bytes, dela_fildata, delvis_avkodning, visa_fil,
                         jamfor_filer, visa_kvitto, skillnadsbild, forstora)
+from kalibreringsdata import kor_kalibrering, senaste_kalibrering, kalibreringstid
 
 # ==============================================================================
 # ANVÄNDARGRÄNSSNITT (STREAMLIT)
@@ -25,6 +26,20 @@ st.set_page_config(page_title="Optisk Kommunikation", layout="wide")
 # ---------------------------------------------------------
 if 'history' not in st.session_state:
     st.session_state.history = None
+
+def tillampa_kalibrering(rapport):
+    """Sätter inställningarna till de kalibrerade värdena. Själva kalibreringen ändras aldrig."""
+    st.session_state.step_time_val = round(rapport["step_time_s"], 6)
+    st.session_state.sample_rate_val = 1.0 / st.session_state.step_time_val
+    st.session_state.threshold_val = round(rapport["recommended_threshold_v"], 2)
+
+if 'kalibrering' not in st.session_state:
+    st.session_state.kalibrering = senaste_kalibrering()
+    if st.session_state.kalibrering is not None:
+        tillampa_kalibrering(st.session_state.kalibrering)
+
+if st.session_state.pop("tillampa_kalibrering", False) and st.session_state.kalibrering is not None:
+    tillampa_kalibrering(st.session_state.kalibrering)
 
 if 'step_time_val' not in st.session_state:
     st.session_state.step_time_val = 0.004
@@ -52,6 +67,31 @@ def update_threshold():
         st.session_state.threshold_val = 0.0
     if st.session_state.threshold_val > 5.0:
         st.session_state.threshold_val = 5.0
+
+def visa_kalibreringsinfo(rapport):
+    """Innehållet i knappen 'Senaste kalibrering'."""
+    if rapport is None:
+        st.markdown("Ingen godkänd kalibrering har gjorts ännu.")
+        return
+    st.markdown(f"**Senast kalibrerad:** {kalibreringstid(rapport)}")
+    if rapport.get("simulated"):
+        st.warning("Simulerad kalibrering, inte uppmätt på utrustningen.")
+    niva = rapport.get("level_statistics", {})
+    rader = [
+        ("Tröskel", f"{rapport['recommended_threshold_v']:.3f} V"),
+        ("Bittid", f"{rapport['step_time_s'] * 1000:g} ms ({1 / rapport['step_time_s']:.0f} bit/s)"),
+        ("Samplingsfrekvens", f"{rapport.get('sample_rate_hz', 0):.0f} sampel/s"),
+        ("Nollnivå (median)", f"{niva.get('zero', {}).get('median_v', float('nan')):.3f} V"),
+        ("Ettnivå +AO / −AO (median)", f"{niva.get('one_positive_ao', {}).get('median_v', float('nan')):.3f} / "
+                                       f"{niva.get('one_negative_ao', {}).get('median_v', float('nan')):.3f} V"),
+        ("Marginal mellan nivåerna", f"{rapport.get('separation_v', float('nan')):.3f} V"),
+        ("Valideringsfel med ny tröskel", f"{rapport.get('candidate_validation_errors')} av {rapport.get('validation_bits')}"),
+        ("Valideringsfel med tidigare tröskel",
+         f"{rapport.get('current_threshold_validation_errors')} av {rapport.get('validation_bits')} "
+         f"({rapport.get('current_threshold_v', float('nan')):.2f} V)"),
+    ]
+    st.table(pd.DataFrame(rader, columns=["", "Värde"]).set_index(""))
+    st.caption(f"Rapport: {rapport.get('mapp', '')}")
 
 # ---------------------------------------------------------
 # 2. HUVUDMENY
@@ -87,6 +127,60 @@ with st.expander("Debug-meny"):
         "Simulerade bitfel (%)", min_value=0.0, max_value=20.0, value=0.0, step=0.5,
         help="Endast i simuleringsläge. Vänder slumpvis bitar i nyttodatan för att visa hur Hamming-koden rättar fel."
     )
+
+    st.markdown("### Kalibrering")
+    kalibrering = st.session_state.kalibrering
+    if kalibrering is None:
+        st.caption("Ingen godkänd kalibrering finns ännu, så standardvärdena används.")
+    else:
+        status = (f"Kalibrerad tröskel {kalibrering['recommended_threshold_v']:.2f} V vid "
+                  f"{kalibrering['step_time_s'] * 1000:g} ms/bit ({kalibreringstid(kalibrering)})")
+        if kalibrering.get("simulated"):
+            status += ", simulerad"
+        avviker = (abs(st.session_state.threshold_val - round(kalibrering["recommended_threshold_v"], 2)) > 1e-9
+                   or abs(st.session_state.step_time_val - round(kalibrering["step_time_s"], 6)) > 1e-9)
+        if avviker:
+            status += ". Inställningarna ovan avviker just nu från kalibreringen."
+        st.caption(status)
+
+    col_k1, col_k2, col_k3 = st.columns(3)
+    with col_k1:
+        kalibrera = st.button("Kalibrera nu", use_container_width=True,
+                              help="Skickar ett känt testmönster med nuvarande bittid och räknar fram en tröskel. "
+                                   "Simuleras om 'Simulera Hårdvara' är påslaget.")
+    with col_k2:
+        if st.button("Återställ kalibrerade värden", use_container_width=True, disabled=kalibrering is None):
+            st.session_state.tillampa_kalibrering = True
+            st.rerun()
+    with col_k3:
+        with st.popover("Senaste kalibrering", use_container_width=True):
+            visa_kalibreringsinfo(kalibrering)
+
+    if kalibrera:
+        with st.spinner("Kalibrerar... skickar ett känt testmönster"):
+            try:
+                resultat = kor_kalibrering(st.session_state.step_time_val, st.session_state.threshold_val, simulate_hw)
+            except Exception as e:
+                tips = (" Modulen 'nidaqmx' saknas. Slå på 'Simulera Hårdvara' för att testa utan DAQ-kortet."
+                        if "nidaqmx" in str(e).lower() else "")
+                st.session_state.kalibrering_meddelande = ("error", f"Kalibreringen avbröts: {e}.{tips}")
+            else:
+                if resultat["accepted"]:
+                    st.session_state.kalibrering = resultat
+                    st.session_state.tillampa_kalibrering = True
+                    st.session_state.kalibrering_meddelande = (
+                        "success", f"Kalibreringen godkändes. Ny tröskel: {resultat['recommended_threshold_v']:.2f} V.")
+                else:
+                    kandidat = resultat.get("candidate_threshold_v")
+                    text = "Kalibreringen underkändes, så de tidigare värdena behålls. " + " ".join(resultat["reasons"])
+                    if kandidat is not None:
+                        text += f" (Kandidat: {kandidat:.2f} V.)"
+                    st.session_state.kalibrering_meddelande = ("warning", text)
+        st.rerun()
+
+    if st.session_state.get("kalibrering_meddelande"):
+        typ, text = st.session_state.kalibrering_meddelande
+        getattr(st, typ)(text)
 
     st.markdown("### Manuell Bitsändning")
     manual_bits = st.text_input("Skriv in egna bitar (0 och 1):", placeholder="T.ex. 10101100")
@@ -448,10 +542,10 @@ with col_tx:
             if raw_data:
                 rx_times = np.arange(len(raw_data)) / sample_rate
                 rx_df = pd.DataFrame({
-                    "Tid (s)": rx_times, 
+                    "Time (s)": rx_times, 
                     "Signal (V)": raw_data,
-                    "Tröskelvärde (V)": [decode_threshold] * len(raw_data)
-                }).set_index("Tid (s)")
+                    "Threshold (V)": [decode_threshold] * len(raw_data)
+                }).set_index("Time (s)")
             else:
                 rx_df = None
             
@@ -483,6 +577,14 @@ with col_tx:
             else:
                 avkodningsfel = rx_text != original_text
             
+            kalibrering = st.session_state.kalibrering
+            if kalibrering is None:
+                kalibreringstext = "none"
+            else:
+                kalibreringstext = f"{kalibreringstid(kalibrering)}, {kalibrering['recommended_threshold_v']:.2f} V"
+                if kalibrering.get("simulated"):
+                    kalibreringstext += " (simulated)"
+            
             rx_tidpunkt = dt.datetime.now()
             txt_log_content = (
                 "--- OPTKOM MESSAGE LOG ---\n\n"
@@ -493,6 +595,7 @@ with col_tx:
                 f"Sample rate (bit/s): {1.0 / step_time_input:.2f}\n"
                 f"Extra time (s): {extra_time_input:.2f}\n"
                 f"Threshold (V): {decode_threshold:.2f}\n"
+                f"Calibration: {kalibreringstext}\n"
                 f"Sent message converted to bits (incl seq): {tx_bits_full}\n"
                 f"Received bits (excl seq): {rx_bits}\n"
                 f"Decoded received message: {rx_text}\n"

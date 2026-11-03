@@ -7,7 +7,8 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 - [x] Göra klart guide för interface
 - [ ] Fixa kort guide för hårdvaran
 - [ ] Lägga till trädet för huffman-kodningen i loggen?
-- [ ] Varför är .csv-filen på svenska?!
+- [x] Varför är .csv-filen på svenska?!
+- [ ] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
 
 ## Installation
 1. Installera python
