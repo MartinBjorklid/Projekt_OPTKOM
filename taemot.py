@@ -1,22 +1,16 @@
-"""Mottagare med automatisk bitsynkronisering via startsekvensen.
-
-Ersätt innehållet i taemot.py med denna fil. Läser enbart Dev1/ai0
-(TIA-signalen), inte hårdvarukomparatorn. Kräver numpy och nidaqmx.
-"""
-
 import time
-
 import numpy as np
-import nidaqmx
-from nidaqmx.constants import AcquisitionType, TerminalConfiguration
-
 from skicka import Start_seq, Slut_seq, step_time as STANDARD_BITTID
+
+def berakna_sampel_per_bit(step_time):
+    """Antal AI-sampel per bit som mottagaren (och simuleringen) använder."""
+    return max(25, int(round(5000 * step_time)))
 
 
 class SynkadBitavkodare:
     """Tar emot en ström av AI-sampel och avläser bitar i deras mitt."""
 
-    def __init__(self, sampel_per_bit, threshold=2.3, max_payload_bits=4096):
+    def __init__(self, sampel_per_bit, threshold=3.0, max_payload_bits=1_000_000):
         self.n = int(sampel_per_bit)
         if self.n < 12:
             raise ValueError("För få AI-sampel per bit; öka AI-samplingsfrekvensen.")
@@ -42,27 +36,21 @@ class SynkadBitavkodare:
         startlangd = len(Start_seq) * self.n
 
         if self.start_index is None:
-            # Identifiera första stigande flanken efter vilonivå.
-            # Prova kandidater först när HELA startsekvensen finns i bufferten.
             while self.sok_index + startlangd <= len(self.data):
                 i = self.sok_index
                 self.sok_index += 1
                 if not (self.data[i - 1] < self.threshold <= self.data[i]):
                     continue
-                # Kräv en låg nivå före den första ettan i startsekvensen.
                 if i >= self.n and np.median(self.data[i-self.n:i]) >= self.threshold:
                     continue
                 if [self._bit(i, j) for j in range(len(Start_seq))] == Start_seq:
                     self.start_index = i
-                    print(f"Startsekvens bekräftad vid AI-sampel {i}. "
-                          "Synkroniserar till bitarnas mittpunkter.")
+                    print(f"Startsekvens bekräftad vid AI-sampel {i}. Synkroniserar.")
                     break
 
         if self.start_index is None:
             return
 
-        # Läs varje efterföljande bit relativt den upptäckta startflanken.
-        # Hela biten ska finnas i bufferten innan den avläses.
         while self.start_index + (self.nasta_bit + 1) * self.n <= len(self.data):
             bit = self._bit(self.start_index, self.nasta_bit)
             self.nasta_bit += 1
@@ -74,28 +62,34 @@ class SynkadBitavkodare:
                 return
 
             if len(self.payload) > self.max_payload_bits + len(Slut_seq):
-                raise RuntimeError("Meddelandet överskred max_payload_bits utan slutsekvens.")
+                raise RuntimeError("Meddelandet överskred max_payload_bits.")
 
 
 def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
-                       threshold=2.3, timeout_s=15.0, ready_event=None):
-    """Returnera nyttobitar eller [] vid timeout. Samplar med DAQ:ens hårdvaruklocka.
-
-    ready_event kan användas av program.py så att sändning sker först efter
-    att DAQ-mottagningen faktiskt startat.
+                       threshold=2.3, timeout_s=15.0, ready_event=None,
+                       avkodare=None, stop_event=None):
     """
+    avkodare: en SynkadBitavkodare som anroparen skapat. Då kan anroparen läsa
+              avkodare.payload under mottagningen och visa data medan den kommer in.
+    stop_event: om den sätts avbryts mottagningen.
+    """
+    
+    # Lokal import: Kraschar inte om man kör i simuleringsläget utan nidaqmx installerat
+    import nidaqmx
+    from nidaqmx.constants import AcquisitionType, TerminalConfiguration
+    
     if step_time <= 0:
         raise ValueError("step_time måste vara positiv.")
-    # Minst 25 sampel/bit, utan att överstiga 100 kS/s för en AI-kanal.
-    sampel_per_bit = max(25, int(round(5000 * step_time)))
+    
+    sampel_per_bit = berakna_sampel_per_bit(step_time)
     sample_rate = sampel_per_bit / step_time
     if sample_rate > 100_000:
-        raise ValueError("För kort bittid för denna DAQ och vald översampling.")
+        raise ValueError("För kort bittid för denna DAQ.")
 
-    avkodare = SynkadBitavkodare(sampel_per_bit, threshold)
+    if avkodare is None:
+        avkodare = SynkadBitavkodare(sampel_per_bit, threshold)
     deadline = time.monotonic() + timeout_s
-    print(f"Lyssnar på {channel}: {sample_rate:.0f} sampel/s, "
-          f"{sampel_per_bit} sampel/bit, tröskel {threshold:g} V.")
+    print(f"Lyssnar på {channel}: {sample_rate:.0f} sampel/s")
 
     try:
         with nidaqmx.Task() as task:
@@ -114,6 +108,9 @@ def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
                 ready_event.set()
 
             while time.monotonic() < deadline:
+                if stop_event is not None and stop_event.is_set():
+                    print("Mottagning avbruten.")
+                    break
                 block = task.read(
                     number_of_samples_per_channel=max(sampel_per_bit, int(sample_rate * 0.02)),
                     timeout=2.0,
@@ -121,19 +118,18 @@ def receive_continuous(step_time=STANDARD_BITTID, channel="Dev1/ai0",
                 avkodare.mata_in(block)
                 if avkodare.klar:
                     print(f"Slutsekvens mottagen. {len(avkodare.payload)} nyttobitar.")
-                    return avkodare.payload
+                    # NYTT: Returnerar både payload OCH all rådata som samlats in
+                    return avkodare.payload, avkodare.data
 
     except Exception as exc:
-        print(f"Mottagarfel: {exc}")
-        return []
+        raise RuntimeError(f"Hårdvarufel i DAQ-kortet: {exc}")
+        
     finally:
-        # Väck huvudprogrammet även om NI-task inte kunde startas.
         if ready_event is not None:
             ready_event.set()
 
     print("Timeout: ingen fullständig ram mottagen.")
-    return []
-
+    return [], []
 
 if __name__ == "__main__":
     print("Mottagna nyttobitar:", receive_continuous())

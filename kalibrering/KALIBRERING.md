@@ -65,4 +65,4 @@ python kalibrering.py --simulate --output /tmp/kalibrering-demo
 python -m unittest test_kalibrering -v
 ```
 
-Simulerade rapporter märks tydligt och är inte en kalibrering av er utrustning.
+Simulerade rapporter märks tydligt och är inte en kalibrering av riktig utrustning.

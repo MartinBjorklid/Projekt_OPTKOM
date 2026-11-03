@@ -105,27 +105,12 @@ def encode(compressed_bit):
     Encodes compressed bits using hamming code (7,4) as in example
     \nadds padding to become divisible by 4
     \ncreates generator matrix G and parity check matrix H
-
-    Parameters
-    ----------
-    compressed_bit : list
-        String containing compressed binary data
-
-    Returns
-    -------
-    encoded_bits : np.ndarray
-        Binary array containing Hamming encoded bits
-    H : np.ndarray
-        Parity check matrix used when decoding
-    padding : int
-        Number of padding bits added before encoding
     """
     #Adding padding
     compressed_bit = list(compressed_bit)
     padding = 0
     remainder = len(compressed_bit)%4
     while remainder != 0:
-        #print(remainder)
         compressed_bit.append(0)
         remainder = len(compressed_bit)%4
         padding += 1
@@ -144,53 +129,48 @@ def encode(compressed_bit):
     #Encoding
     encoded_matrix = (bit_array@G)%2
     encoded_bits = encoded_matrix.flatten()
-    #Matches theory as follows (k = 4, n = 7):
-    #print(len(compressed_bit)/len(encoded_bits))
-    #print(4/7)
     return encoded_bits, H, padding
 
 
-def decode(encoded_bits, H, padding):
+def hamming_correct(encoded_bits, H):
     """
-    Decodes and error corrects data that has been coded with hamming code (7,4)
-    \nCalculates syndrome and corrects if wrong (1 bit only)
-    \nremoves parity bits and padding after decoding and error correction.
-
-    Parameters
-    ----------
-    encoded_bits : np.ndarray
-        Received binary data after demodulation
-    H : np.ndarray
-        Parity check matrix
-    padding : int
-        Number of padding bits added during encoding
-
-    Returns
-    -------
-    decoded_data : list
-        Integer bits with parity and padding removed, ready for huffman_decode
+    Corrects single bit errors in each hamming (7,4) block.
+    
+Returns the corrected codewords as a (blocks, 7) matrix and the
+    
+positions in encoded_bits of the bits that were flipped.
     """
     #r has shape (900/4,7)
     r = np.asarray(encoded_bits, dtype=int).reshape(-1,7).copy()
     #s has shape (900/4,3)
     s = ((H@r.T)%2).T
-    #print(s)
-    H_columns = H.T
-    error_index = []
-    for block_index,syndrome in enumerate(s):
-        if syndrome.any():
-            for seq_index,col in enumerate(H_columns):
-                if np.array_equal(syndrome,col):
-                    #print(seq_index)
-                    error_index.append([block_index,seq_index])
-                    print(f"Error fixed at row,col {block_index,seq_index}")
-                    r[block_index,seq_index] ^= 1
-                    break
+    # Every nonzero syndrome equals exactly one column of H -> that bit is wrong.
+    # Syndromes and columns are turned into numbers 1-7 so all blocks are corrected at once.
+    weights = np.array([4, 2, 1])
+    column_of_syndrome = np.full(8, -1)
+    column_of_syndrome[H.T @ weights] = np.arange(7)
+    error_columns = column_of_syndrome[s @ weights]
+    error_blocks = np.nonzero(error_columns >= 0)[0]
+    r[error_blocks, error_columns[error_blocks]] ^= 1
+    return r, error_blocks * 7 + error_columns[error_blocks]
+
+
+def decode(encoded_bits, H, padding, verbose=True, return_corrections=False):
+    """
+    Decodes and error corrects data that has been coded with hamming code (7,4)
+    \nCalculates syndrome and corrects if wrong (1 bit only)
+    \nremoves parity bits and padding after decoding and error correction.
+    \nreturn_corrections=True also returns the number of corrected bits.
+    """
+    r, corrected_positions = hamming_correct(encoded_bits, H)
+    if verbose and len(corrected_positions) > 0:
+        print(f"Hamming: fixed {len(corrected_positions)} errors")
     k = r[:,:4]
     decoded_data = k.ravel().tolist()
-    #print(decoded_data)
     if padding > 0:
         decoded_data = decoded_data[:-padding]
+    if return_corrections:
+        return decoded_data, len(corrected_positions)
     return decoded_data
 
 
@@ -198,7 +178,11 @@ def decode(encoded_bits, H, padding):
 # 3. Gör bits till text
 # ============================================================
 
-def huffman_decode(bits, tree):
+def huffman_decode(bits, tree, allow_incomplete=False):
+    """
+    allow_incomplete=True ignorerar ett ofullständigt sista tecken
+    (används när texten visas medan den fortfarande tas emot).
+    """
 
     result = []
     node = tree
@@ -226,7 +210,7 @@ def huffman_decode(bits, tree):
 
     # Om vi inte är tillbaka vid roten är bitsträngen
     # ofullständig
-    if node != tree:
+    if node != tree and not allow_incomplete:
         raise ValueError(
             "Ofullständig Huffman-bitsträng."
         )
@@ -239,9 +223,7 @@ def huffman_decode(bits, tree):
 # ============================================================
 
 frequencies = {
-
     " ": 18.0,
-
     "e": 12.0,
     "a": 9.3,
     "n": 8.5,
@@ -258,19 +240,15 @@ frequencies = {
     "v": 2.4,
     "h": 2.1,
     "u": 2.0,
-
     "b": 1.3,
     "c": 1.7,
     "f": 1.8,
     "p": 1.8,
-
     "å": 1.3,
     "ä": 1.8,
     "ö": 1.0,
-
     "j": 0.7,
     "y": 0.7,
-
     "q": 0.02,
     "w": 0.02,
     "x": 0.1,
@@ -279,22 +257,5 @@ frequencies = {
     "?": 0.1
 }
 
-
 tree = build_huffman_tree(frequencies)
-
 codes = create_huffman_codes(tree)
-
-
-# ============================================================
-# 8. VISA BIT-TABELLEN
-# ============================================================
-
-# print("BIT-TABELL")
-# print("-------------------------")
-
-# for char, code in sorted(
-#     codes.items(),
-#     key=lambda item: (len(item[1]), item[1])
-# ):
-#     print(repr(char), "->", code)
-
