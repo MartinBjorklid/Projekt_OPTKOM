@@ -8,13 +8,14 @@ import datetime as dt
 # ==============================================================================
 # IMPORTERA BACKEND-FUNKTIONER
 # ==============================================================================
-from skicka import send_binary_list, lagg_till_avslutningsbit, Start_seq, Slut_seq
-from taemot import receive_continuous, SynkadBitavkodare, berakna_sampel_per_bit
-from Signalbehandling import huffman_encode, huffman_decode, tree, codes, encode, decode, hamming_correct
+from skicka import (send_binary_list, bygg_ram, till_spanningar, Start_seq,
+                    LANGDFALT_BITAR, LANGDFALT_KOPIOR, AO_SAMPEL_PER_BIT)
+from taemot import receive_continuous, SynkadBitavkodare, samplingsparametrar
+from Signalbehandling import huffman_encode, huffman_decode, tree, codes
 from grafer import minmax_utglesning, signalgraf, bitstrang
 from filvisning import (bitar_till_bytes, dela_fildata, delvis_avkodning, visa_fil,
                         jamfor_filer, visa_kvitto, skillnadsbild, forstora)
-from kalibreringsdata import kor_kalibrering, senaste_kalibrering, kalibreringstid
+from kalibreringsdata import kor_kalibrering, las_parametrar
 
 # ==============================================================================
 # ANVÄNDARGRÄNSSNITT (STREAMLIT)
@@ -27,19 +28,23 @@ st.set_page_config(page_title="Optisk Kommunikation", layout="wide")
 if 'history' not in st.session_state:
     st.session_state.history = None
 
-def tillampa_kalibrering(rapport):
-    """Sätter inställningarna till de kalibrerade värdena. Själva kalibreringen ändras aldrig."""
-    st.session_state.step_time_val = round(rapport["step_time_s"], 6)
-    st.session_state.sample_rate_val = 1.0 / st.session_state.step_time_val
-    st.session_state.threshold_val = round(rapport["recommended_threshold_v"], 2)
+def tillampa_kalibrering(step_time, threshold):
+    """Sätter inställningarna till givna kalibrerade värden. parametrar.py ändras aldrig här."""
+    st.session_state.step_time_val = step_time
+    st.session_state.sample_rate_val = round(1.0 / step_time, 2)
+    st.session_state.threshold_val = round(threshold, 2)
 
+# Vid uppstart hämtas de senast kalibrerade värdena från parametrar.py.
+# Ändras inställningarna efteråt påverkas inte parametrar.py.
 if 'kalibrering' not in st.session_state:
-    st.session_state.kalibrering = senaste_kalibrering()
-    if st.session_state.kalibrering is not None:
-        tillampa_kalibrering(st.session_state.kalibrering)
+    st.session_state.kalibrering = las_parametrar()
+    tillampa_kalibrering(st.session_state.kalibrering["step_time"], st.session_state.kalibrering["threshold"])
 
-if st.session_state.pop("tillampa_kalibrering", False) and st.session_state.kalibrering is not None:
-    tillampa_kalibrering(st.session_state.kalibrering)
+# En nyss gjord kalibrering (eller "Återställ kalibrerade värden") tillämpas innan
+# inställningsfälten skapas, eftersom Streamlit inte tillåter ändringar efter det
+vantande_kalibrering = st.session_state.pop("tillampa_kalibrering", None)
+if vantande_kalibrering is not None:
+    tillampa_kalibrering(*vantande_kalibrering)
 
 if 'step_time_val' not in st.session_state:
     st.session_state.step_time_val = 0.004
@@ -68,30 +73,25 @@ def update_threshold():
     if st.session_state.threshold_val > 5.0:
         st.session_state.threshold_val = 5.0
 
-def visa_kalibreringsinfo(rapport):
+def visa_kalibreringsinfo(parametrar, senaste_korning):
     """Innehållet i knappen 'Senaste kalibrering'."""
-    if rapport is None:
-        st.markdown("Ingen godkänd kalibrering har gjorts ännu.")
-        return
-    st.markdown(f"**Senast kalibrerad:** {kalibreringstid(rapport)}")
-    if rapport.get("simulated"):
-        st.warning("Simulerad kalibrering, inte uppmätt på utrustningen.")
-    niva = rapport.get("level_statistics", {})
-    rader = [
-        ("Tröskel", f"{rapport['recommended_threshold_v']:.3f} V"),
-        ("Bittid", f"{rapport['step_time_s'] * 1000:g} ms ({1 / rapport['step_time_s']:.0f} bit/s)"),
-        ("Samplingsfrekvens", f"{rapport.get('sample_rate_hz', 0):.0f} sampel/s"),
-        ("Nollnivå (median)", f"{niva.get('zero', {}).get('median_v', float('nan')):.3f} V"),
-        ("Ettnivå +AO / −AO (median)", f"{niva.get('one_positive_ao', {}).get('median_v', float('nan')):.3f} / "
-                                       f"{niva.get('one_negative_ao', {}).get('median_v', float('nan')):.3f} V"),
-        ("Marginal mellan nivåerna", f"{rapport.get('separation_v', float('nan')):.3f} V"),
-        ("Valideringsfel med ny tröskel", f"{rapport.get('candidate_validation_errors')} av {rapport.get('validation_bits')}"),
-        ("Valideringsfel med tidigare tröskel",
-         f"{rapport.get('current_threshold_validation_errors')} av {rapport.get('validation_bits')} "
-         f"({rapport.get('current_threshold_v', float('nan')):.2f} V)"),
-    ]
-    st.table(pd.DataFrame(rader, columns=["", "Värde"]).set_index(""))
-    st.caption(f"Rapport: {rapport.get('mapp', '')}")
+    st.markdown(f"**Senast kalibrerad:** {parametrar['tid'] or 'okänt (inget datum i parametrar.py)'}")
+    st.table(pd.DataFrame([
+        ("Bitfrekvens", f"{1 / parametrar['step_time']:.0f} bit/s ({parametrar['step_time'] * 1000:.3f} ms/bit)"),
+        ("Tröskel", f"{parametrar['threshold']:.3f} V"),
+    ], columns=["", "Värde"]).set_index(""))
+    if parametrar["kommentarer"]:
+        st.caption(" ".join(parametrar["kommentarer"]))
+    st.caption(f"Fil: {parametrar['fil']}")
+
+    if senaste_korning is not None:
+        st.markdown("**Svep i senaste körningen**" + (" (simulerad)" if senaste_korning["simulerad"] else ""))
+        st.table(pd.DataFrame([
+            (r["frekvens"], "OK" if r["giltiga"] else "FEL",
+             f"{min(r['giltiga']):.2f}–{max(r['giltiga']):.2f} V" if r["giltiga"] else "-",
+             f"{r['vilonivå']:.3f} V", f"{r['hogsta']:.3f} V")
+            for r in senaste_korning["svep"]
+        ], columns=["bit/s", "Resultat", "Godkända trösklar", "Vila", "Max"]).set_index("bit/s"))
 
 # ---------------------------------------------------------
 # 2. HUVUDMENY
@@ -125,57 +125,61 @@ with st.expander("Debug-meny"):
     simulate_hw = st.toggle("Simulera Hårdvara (Inget DAQ-kort)", value=False)
     sim_bitfel_procent = st.number_input(
         "Simulerade bitfel (%)", min_value=0.0, max_value=20.0, value=0.0, step=0.5,
-        help="Endast i simuleringsläge. Vänder slumpvis bitar i nyttodatan för att visa hur Hamming-koden rättar fel."
+        help="Endast i simuleringsläge. Vänder slumpvis bitar i nyttodatan för att visa hur bitfel påverkar meddelandet."
     )
 
     st.markdown("### Kalibrering")
     kalibrering = st.session_state.kalibrering
-    if kalibrering is None:
-        st.caption("Ingen godkänd kalibrering finns ännu, så standardvärdena används.")
-    else:
-        status = (f"Kalibrerad tröskel {kalibrering['recommended_threshold_v']:.2f} V vid "
-                  f"{kalibrering['step_time_s'] * 1000:g} ms/bit ({kalibreringstid(kalibrering)})")
-        if kalibrering.get("simulated"):
-            status += ", simulerad"
-        avviker = (abs(st.session_state.threshold_val - round(kalibrering["recommended_threshold_v"], 2)) > 1e-9
-                   or abs(st.session_state.step_time_val - round(kalibrering["step_time_s"], 6)) > 1e-9)
-        if avviker:
-            status += ". Inställningarna ovan avviker just nu från kalibreringen."
-        st.caption(status)
+    status = (f"Kalibrerat {kalibrering['tid'] or '(okänt datum)'}: {1 / kalibrering['step_time']:.0f} bit/s, "
+              f"tröskel {kalibrering['threshold']:.2f} V (parametrar.py)")
+    if (abs(st.session_state.step_time_val - kalibrering["step_time"]) > 1e-9
+            or abs(st.session_state.threshold_val - round(kalibrering["threshold"], 2)) > 1e-9):
+        status += ". Inställningarna ovan avviker just nu från kalibreringen."
+    st.caption(status)
 
     col_k1, col_k2, col_k3 = st.columns(3)
     with col_k1:
         kalibrera = st.button("Kalibrera nu", use_container_width=True,
-                              help="Skickar ett känt testmönster med nuvarande bittid och räknar fram en tröskel. "
-                                   "Simuleras om 'Simulera Hårdvara' är påslaget.")
+                              help="Kör kalibrering.py: sveper 200–350 bit/s, gör ett långt test med 3000 bitar "
+                                   "och väljer bitfrekvens och tröskel. Tar 1–2 minuter. Resultatet sparas i "
+                                   "parametrar.py. Med 'Simulera Hårdvara' påslaget simuleras mätningarna "
+                                   "och inget sparas.")
     with col_k2:
-        if st.button("Återställ kalibrerade värden", use_container_width=True, disabled=kalibrering is None):
-            st.session_state.tillampa_kalibrering = True
+        if st.button("Återställ kalibrerade värden", use_container_width=True):
+            st.session_state.kalibrering = las_parametrar()
+            st.session_state.tillampa_kalibrering = (st.session_state.kalibrering["step_time"],
+                                                     st.session_state.kalibrering["threshold"])
             st.rerun()
     with col_k3:
         with st.popover("Senaste kalibrering", use_container_width=True):
-            visa_kalibreringsinfo(kalibrering)
+            visa_kalibreringsinfo(kalibrering, st.session_state.get("senaste_kalibreringskorning"))
 
     if kalibrera:
-        with st.spinner("Kalibrerar... skickar ett känt testmönster"):
-            try:
-                resultat = kor_kalibrering(st.session_state.step_time_val, st.session_state.threshold_val, simulate_hw)
-            except Exception as e:
-                tips = (" Modulen 'nidaqmx' saknas. Slå på 'Simulera Hårdvara' för att testa utan DAQ-kortet."
-                        if "nidaqmx" in str(e).lower() else "")
-                st.session_state.kalibrering_meddelande = ("error", f"Kalibreringen avbröts: {e}.{tips}")
+        framsteg = st.progress(0.0, text="Startar kalibreringen...")
+        try:
+            resultat = kor_kalibrering(simulate_hw, lambda text, andel: framsteg.progress(andel, text=text))
+        except Exception as e:
+            tips = (" Modulen 'nidaqmx' saknas. Slå på 'Simulera Hårdvara' för att testa utan DAQ-kortet."
+                    if "nidaqmx" in str(e).lower() else "")
+            st.session_state.kalibrering_meddelande = ("error", f"Kalibreringen avbröts: {e}.{tips}")
+        else:
+            st.session_state.senaste_kalibreringskorning = {"svep": resultat["svep"], "simulerad": simulate_hw}
+            vald = resultat["vald"]
+            if vald is None:
+                st.session_state.kalibrering_meddelande = (
+                    "warning", f"Kalibreringen misslyckades, så de tidigare värdena behålls. {resultat['meddelande']}")
             else:
-                if resultat["accepted"]:
-                    st.session_state.kalibrering = resultat
-                    st.session_state.tillampa_kalibrering = True
+                st.session_state.tillampa_kalibrering = (1 / vald["frekvens"], vald["threshold"])
+                text = (f"{vald['frekvens']} bit/s och tröskel {vald['threshold']:.2f} V "
+                        f"(mitt i {vald['troskel_min']:.2f}–{vald['troskel_max']:.2f} V)")
+                if simulate_hw:
                     st.session_state.kalibrering_meddelande = (
-                        "success", f"Kalibreringen godkändes. Ny tröskel: {resultat['recommended_threshold_v']:.2f} V.")
+                        "success", f"Simulerad kalibrering klar: {text}. Värdena används i den här sessionen "
+                                   "men sparas inte i parametrar.py.")
                 else:
-                    kandidat = resultat.get("candidate_threshold_v")
-                    text = "Kalibreringen underkändes, så de tidigare värdena behålls. " + " ".join(resultat["reasons"])
-                    if kandidat is not None:
-                        text += f" (Kandidat: {kandidat:.2f} V.)"
-                    st.session_state.kalibrering_meddelande = ("warning", text)
+                    st.session_state.kalibrering = las_parametrar()
+                    st.session_state.kalibrering_meddelande = (
+                        "success", f"Kalibreringen är klar och sparad i parametrar.py: {text}.")
         st.rerun()
 
     if st.session_state.get("kalibrering_meddelande"):
@@ -196,29 +200,35 @@ with col_rx:
     st.header("Mottagare")
     rx_live = st.empty()
 
-def rita_live_mottagning(avkodare, H, antal_bitar, senast_ritat):
+def rita_live_mottagning(avkodare, avkoda, senast_ritat):
     """
     Visar det som hittills tagits emot i mottagarkolumnen.
     Ritar bara om när nya bitar har kommit. Returnerar vad som ritades.
     """
-    bitar = list(avkodare.payload)
-    if not avkodare.klar:
-        # De sista bitarna kan vara början på slutsekvensen och visas inte än
-        bitar = bitar[:max(0, len(bitar) - len(Slut_seq))]
-    lage = (avkodare.start_index is not None, len(bitar))
+    if avkodare is None:
+        lage = ("startar",)
+    else:
+        bitar = list(avkodare.payload)
+        lage = (avkodare.start_index is not None, avkodare.langd, len(bitar))
     if lage == senast_ritat:
         return senast_ritat
 
     with rx_live.container():
         st.subheader("Tar emot...")
+        if avkodare is None:
+            st.info("Startar mottagaren...")
+            return lage
         if avkodare.start_index is None:
             st.info("Väntar på startsekvens...")
             return lage
-        st.progress(min(1.0, len(bitar) / max(1, antal_bitar)), text=f"{len(bitar)} av {antal_bitar} bitar mottagna")
-        if H is None:  # Manuell bitsändning avkodas inte
+        if avkodare.langd is None:
+            st.info("Startsekvens hittad. Tar emot längdfältet...")
+            return lage
+        st.progress(min(1.0, len(bitar) / avkodare.langd), text=f"{len(bitar)} av {avkodare.langd} bitar mottagna")
+        if not avkoda:  # Manuell bitsändning avkodas inte
             return lage
         try:
-            delvis = delvis_avkodning(bitar, H)
+            delvis = delvis_avkodning(bitar)
         except Exception:
             return lage
         if delvis is None:
@@ -249,8 +259,6 @@ with col_tx:
     tx_bits_full = []
     nyttobitar = []
     original_text = ""
-    H = None
-    padding = 0
     tx_filename = None
     file_content = None
 
@@ -286,7 +294,8 @@ with col_tx:
         elif message_input:
             # --- TEXTÖVERFÖRING ---
             trigger_send = True
-            original_text = message_input.lower()
+            # Huffman-trädet bygger på träningstexten, så stora och små bokstäver skickas som de är
+            original_text = message_input
             
             try:
                 # 1. Huffman-kodning för text
@@ -302,13 +311,11 @@ with col_tx:
 
         if trigger_send:
             try:
-                # Felkorrigering (Hamming) på antingen text- eller fildatan
-                kodade_bitar, H, padding = encode(data_to_encode)
-                nyttobitar = kodade_bitar.tolist()
-                tx_bits_full = Start_seq + lagg_till_avslutningsbit(nyttobitar) + Slut_seq
-                
+                # Ram: startsekvens + längdfält (3 kopior) + nyttobitar, se skicka.bygg_ram
+                nyttobitar = data_to_encode
+                tx_bits_full = bygg_ram(nyttobitar)
             except Exception as e:
-                st.error(f"Kunde inte applicera felkorrigering (Hamming). Fel: {e}")
+                st.error(f"Kunde inte bygga ramen. Fel: {e}")
                 st.stop()
                 
     elif manual_send and manual_bits:
@@ -322,12 +329,11 @@ with col_tx:
             st.stop()
             
         nyttobitar = clean_bits
-        tx_bits_full = Start_seq + clean_bits + Slut_seq
+        tx_bits_full = bygg_ram(clean_bits)
 
     if trigger_send:
         with st.spinner("Modulerar och sänder signal..."):
             
-            motagna_resultat = []
             mottagar_fel = []
             sandar_fel = []
             redo = threading.Event()
@@ -335,19 +341,23 @@ with col_tx:
             timeout_s = max(15.0, (len(tx_bits_full)) * step_time_input + 6.0)
             decode_threshold = st.session_state.threshold_val 
             
-            # Avkodaren delas mellan mottagartråden och gränssnittet, så att
-            # gränssnittet kan visa datan medan den tas emot
-            sampel_per_bit = berakna_sampel_per_bit(step_time_input)
-            sample_rate = sampel_per_bit / step_time_input
-            avkodare = SynkadBitavkodare(sampel_per_bit, threshold=decode_threshold)
+            # Avkodaren delas mellan mottagartråden och gränssnittet, så att gränssnittet
+            # kan visa datan medan den tas emot. Med riktig hårdvara skapar
+            # receive_continuous avkodaren (med DAQ:ns verkliga frekvenser) och lägger den här.
+            delad_avkodare = []
             sandar_trad = None
             
             if simulate_hw:
                 # --- SIMULERINGSLÄGE ---
-                # Simulerade bitfel läggs bara i nyttodatan, så att start- och slutsekvensen hittas
+                sampel_per_bit, sample_rate = samplingsparametrar(step_time_input)
+                avkodare = SynkadBitavkodare(sampel_per_bit, threshold=decode_threshold)
+                avkodare.ai_rate = sample_rate
+                delad_avkodare.append(avkodare)
+                
+                # Simulerade bitfel läggs bara i nyttodatan, så att startsekvensen och längdfältet hittas
                 sim_bits = np.array(tx_bits_full)
                 if sim_bitfel_procent > 0:
-                    nytta = slice(len(Start_seq), len(tx_bits_full) - len(Slut_seq))
+                    nytta = slice(len(Start_seq) + LANGDFALT_BITAR * LANGDFALT_KOPIOR, len(tx_bits_full))
                     sim_bits[nytta] ^= np.random.random(len(sim_bits[nytta])) < sim_bitfel_procent / 100
                 
                 idle_samples = int(4 * sampel_per_bit)
@@ -370,7 +380,6 @@ with col_tx:
                             if vanta > 0:
                                 time.sleep(vanta)
                             avkodare.mata_in(sim_raw_data[i:i + block])
-                        motagna_resultat.append((avkodare.payload if avkodare.klar else [], avkodare.data))
                     except Exception as e:
                         mottagar_fel.append(str(e))
                 
@@ -381,12 +390,12 @@ with col_tx:
                 # --- RIKTIG HÅRDVARA (MOTTAGARE OCH SÄNDARE I EGNA TRÅDAR) ---
                 def lyssna_i_bakgrunden():
                     try:
-                        res_bits, res_raw = receive_continuous(
+                        receive_continuous(
                             step_time=step_time_input, channel="Dev1/ai0", 
                             threshold=decode_threshold, timeout_s=timeout_s, ready_event=redo,
-                            avkodare=avkodare, stop_event=stopp
+                            skickade_bitar=tx_bits_full, stop_event=stopp,
+                            avkodare_ut=delad_avkodare, kasta_fel=True
                         )
-                        motagna_resultat.append((res_bits, res_raw))
                     except Exception as e:
                         mottagar_fel.append(str(e))
                         redo.set()
@@ -394,7 +403,7 @@ with col_tx:
                 def sand_i_bakgrunden():
                     try:
                         send_binary_list(tx_bits_full, step_time=step_time_input, extra_time=extra_time_input,
-                                         channel="Dev1/ao0", stop_event=stopp)
+                                         channel="Dev1/ao0", stop_event=stopp, visa_graf=False)
                     except Exception as e:
                         sandar_fel.append(str(e))
                         stopp.set()  # Ingen idé att fortsätta lyssna
@@ -430,7 +439,8 @@ with col_tx:
                 while any(t.is_alive() for t in tradar):
                     andel = min(1.0, (time.monotonic() - t_start) / forvantad_tid)
                     tx_status.progress(andel, text=f"Sänder... {int(andel * len(tx_bits_full))} av {len(tx_bits_full)} bitar")
-                    senast_ritat = rita_live_mottagning(avkodare, H, len(nyttobitar), senast_ritat)
+                    senast_ritat = rita_live_mottagning(delad_avkodare[0] if delad_avkodare else None,
+                                                        not is_manual, senast_ritat)
                     time.sleep(0.3)
             finally:
                 # Laddas gränssnittet om mitt i en överföring avbryts trådarna,
@@ -456,21 +466,20 @@ with col_tx:
             if simulate_hw:
                 st.toast("Simulerad överföring och avkodning klar!", icon="✅")
             
-            # Packa upp resultatet
-            if motagna_resultat:
-                rx_bits, raw_data = motagna_resultat[0]
+            # Packa upp resultatet. Nyttobitarna räknas bara om hela ramen (enligt längdfältet) kom fram.
+            avkodare = delad_avkodare[0] if delad_avkodare else None
+            if avkodare is not None:
+                rx_bits = list(avkodare.payload) if avkodare.klar else []
+                raw_data = avkodare.data
+                ai_rate = avkodare.ai_rate
             else:
                 rx_bits, raw_data = [], []
-            
-            # Ta bort avslutningsbiten efter nyttodatan (se skicka.lagg_till_avslutningsbit)
-            if not is_manual:
-                rx_bits = rx_bits[:-1]
+                ai_rate = samplingsparametrar(step_time_input)[1]
                 
             # Avkoda mottagen signal
             rx_is_file = False
             rx_filename = None
             rx_file_data = None
-            antal_rattade = None
             
             if rx_bits:
                 if is_manual:
@@ -478,69 +487,44 @@ with col_tx:
                 else:
                     try:
                         if len(rx_bits) != len(nyttobitar):
-                            st.warning("Fel antal nyttobitar. Kontrollera synkronisering.")
-                            
-                        # Hamming-avkodning. Vid fel längd avkodas de hela block som finns,
-                        # så att det som kom fram ändå kan visas och jämföras
-                        n_hela = len(rx_bits) // 7 * 7
-                        avkodade_bitar, antal_rattade = decode(
-                            rx_bits[:n_hela], H, padding if n_hela == len(nyttobitar) else 0,
-                            return_corrections=True
-                        )
+                            st.warning("Fel antal nyttobitar. Längdfältet har troligen flera bitfel.")
                         
-                        if len(avkodade_bitar) > 0:
-                            # 1. Separera Flagga och Data
-                            flag = avkodade_bitar[0]
-                            payload_bits = avkodade_bitar[1:]
-                            
-                            if flag == 0:
-                                # Data är Text
-                                rx_text = huffman_decode(payload_bits, tree)
-                                
-                            elif flag == 1:
-                                # Data är en Fil! Konvertera bits till bytes
-                                rx_is_file = True
-                                
-                                # Hitta gränsen mellan filnamn (text) och data (0x00)
-                                rx_filename, rx_file_data = dela_fildata(bitar_till_bytes(payload_bits))
-                                if rx_filename is not None:
-                                    rx_text = f"Mottagen fil: {rx_filename} ({len(rx_file_data)} bytes)"
-                                else:
-                                    rx_text = "[Fel vid läsning: Hittade ingen metadata/filnamn i den avkodade datan]"
-                            else:
-                                rx_text = "[Mottog okänd datatyp (Flagga är varken 0 eller 1)]"
+                        # 1. Separera Flagga och Data
+                        flag = rx_bits[0]
+                        payload_bits = rx_bits[1:]
+                        
+                        if flag == 0:
+                            # Data är Text
+                            rx_text = huffman_decode(payload_bits, tree)
                         else:
-                            rx_text = "[Tomt meddelande mottaget efter avkodning]"
+                            # Data är en Fil! Konvertera bits till bytes
+                            rx_is_file = True
+                            
+                            # Hitta gränsen mellan filnamn (text) och data (0x00)
+                            rx_filename, rx_file_data = dela_fildata(bitar_till_bytes(payload_bits))
+                            if rx_filename is not None:
+                                rx_text = f"Mottagen fil: {rx_filename} ({len(rx_file_data)} bytes)"
+                            else:
+                                rx_text = "[Fel vid läsning: Hittade ingen metadata/filnamn i den avkodade datan]"
 
                     except Exception as e:
                         rx_text = f"Något blev fel vid avkodning: {e}"
             else:
                 rx_text = "[Ingen data mottogs]"
             
-            # Var i överföringen uppstod bitfel? De mottagna bitarna jämförs med de skickade
-            # (båda finns i samma program). Tiderna används för att markera felen i grafen.
+            # Var uppstod bitfel? Varje avläst bit i ramen (startsekvens, längdfält och nyttodata)
+            # jämförs med den skickade ramen, som felsok.py gör. Tiderna markeras i grafen.
             fel_markeringar = None
-            if rx_bits and not is_manual and H is not None and avkodare.start_index is not None:
-                m = min(len(rx_bits), len(nyttobitar)) // 7 * 7
-                if m > 0:
-                    rattade_kodord, _ = hamming_correct(rx_bits[:m], H)
-                    skickat = np.asarray(nyttobitar[:m])
-                    kanalfel = np.asarray(rx_bits[:m]) != skickat
-                    fel_kvar = rattade_kodord.ravel() != skickat
-                    
-                    def bit_till_tid(bitindex):
-                        # Mitten av nyttobiten i mottagarens tidsaxel
-                        sampel = avkodare.start_index + (len(Start_seq) + bitindex + 0.5) * sampel_per_bit
-                        return (sampel / sample_rate).tolist()
-                    
-                    fel_markeringar = {
-                        "rattade": bit_till_tid(np.nonzero(kanalfel & ~fel_kvar)[0]),
-                        "kvar": bit_till_tid(np.nonzero(fel_kvar)[0]),
-                    }
+            if avkodare is not None and avkodare.start_index is not None and avkodare.medianer:
+                mottagen_ram = (np.asarray(avkodare.medianer) >= avkodare.threshold).astype(int)
+                k = min(len(mottagen_ram), len(tx_bits_full))
+                fel = np.flatnonzero(mottagen_ram[:k] != np.asarray(tx_bits_full[:k]))
+                # Mitten av varje felaktig bit i mottagarens tidsaxel
+                fel_markeringar = ((np.asarray(avkodare.bitpositioner)[fel] + avkodare.n / 2) / ai_rate).tolist()
             
             # Rådata från fotodetektorn sparas för CSV-export vid både text och fil
             if raw_data:
-                rx_times = np.arange(len(raw_data)) / sample_rate
+                rx_times = np.arange(len(raw_data)) / ai_rate
                 rx_df = pd.DataFrame({
                     "Time (s)": rx_times, 
                     "Signal (V)": raw_data,
@@ -549,17 +533,12 @@ with col_tx:
             else:
                 rx_df = None
             
-            # Styrsignalen till LC-cellen (utglesas innan den visas)
+            # Styrsignalen till LC-cellen: samma AO-sampel som skicka.py skickar (utglesas innan den visas)
             if tx_bits_full:
-                tx_times = []
-                tx_volts = []
-                for i, val in enumerate(tx_bits_full):
-                    t_start = i * step_time_input
-                    t_end = (i + 1) * step_time_input - 1e-6
-                    v = val * 5.0 * ((-1) ** i)
-                    tx_times.extend([t_start, t_end])
-                    tx_volts.extend([v, v])
-                tx_df = pd.DataFrame({"Tid (s)": tx_times, "Spänning (V)": tx_volts}).set_index("Tid (s)")
+                ao_rate = AO_SAMPEL_PER_BIT / step_time_input
+                tx_volts = till_spanningar(tx_bits_full)
+                tx_df = pd.DataFrame({"Tid (s)": np.arange(len(tx_volts)) / ao_rate,
+                                      "Spänning (V)": tx_volts}).set_index("Tid (s)")
             else:
                 tx_df = None
             
@@ -578,12 +557,8 @@ with col_tx:
                 avkodningsfel = rx_text != original_text
             
             kalibrering = st.session_state.kalibrering
-            if kalibrering is None:
-                kalibreringstext = "none"
-            else:
-                kalibreringstext = f"{kalibreringstid(kalibrering)}, {kalibrering['recommended_threshold_v']:.2f} V"
-                if kalibrering.get("simulated"):
-                    kalibreringstext += " (simulated)"
+            kalibreringstext = (f"{kalibrering['tid'] or 'unknown date'}, {1 / kalibrering['step_time']:.0f} bit/s, "
+                                f"{kalibrering['threshold']:.2f} V (parametrar.py)")
             
             rx_tidpunkt = dt.datetime.now()
             txt_log_content = (
@@ -599,8 +574,7 @@ with col_tx:
                 f"Sent message converted to bits (incl seq): {tx_bits_full}\n"
                 f"Received bits (excl seq): {rx_bits}\n"
                 f"Decoded received message: {rx_text}\n"
-                f"Hamming corrections: {antal_rattade if antal_rattade is not None else '-'}\n"
-                f"Bit errors left after Hamming: {len(fel_markeringar['kvar']) if fel_markeringar else '-'}\n"
+                f"Bit errors in frame: {len(fel_markeringar) if fel_markeringar is not None else '-'}\n"
                 f"Error in decoding: {'Yes' if avkodningsfel else 'No'}\n"
             )
             if jamforelse is not None:
@@ -640,12 +614,11 @@ with col_tx:
                 "tx_filename": tx_filename,
                 "tx_file_data": file_content,
                 "jamforelse": jamforelse,
-                "antal_rattade": antal_rattade,
                 "fel_markeringar": fel_markeringar,
             }
 
     def visa_sandarsignal(data):
-        st.subheader("Skickade Bitar (inkl. start/stopp)")
+        st.subheader("Skickade Bitar (inkl. startsekvens och längdfält)")
         st.code(bitstrang(data["tx_bits"]), language=None, wrap_lines=True)
 
         if data.get("tx_df") is not None:
@@ -676,6 +649,8 @@ def visa_mottagarsignal(data):
         st.info("Ingen graf att visa.")
         return
     markeringar = data.get("fel_markeringar")
+    if isinstance(markeringar, dict):  # Sparat av en äldre version med Hamming-kodning
+        markeringar = None
     st.altair_chart(signalgraf(data["rx_df"], "Signal (V)", "#21c354",
                                troskel=data.get("decode_threshold"), markeringar=markeringar),
                     use_container_width=True)
@@ -683,9 +658,8 @@ def visa_mottagarsignal(data):
     totalt = data.get("rx_punkter_totalt", len(data["rx_df"]))
     text = "Streckad orange linje: tröskelvärde."
     if markeringar:
-        text += (f" Blå streck: bitfel som Hamming-koden rättade ({len(markeringar['rattade'])} st)."
-                 f" Röda streck: bitfel som finns kvar ({len(markeringar['kvar'])} st)."
-                 " Felen hittas genom att jämföra med de skickade bitarna.")
+        text += (f" Röda streck: bitar som avlästes fel ({len(markeringar)} st),"
+                 " hittade genom att jämföra med de skickade bitarna.")
     if totalt > len(data["rx_df"]):
         text += f" Visar {len(data['rx_df'])} av {totalt} sampel (min/max per segment)."
     st.caption(text + " All rådata finns i CSV-filen.")
@@ -697,7 +671,7 @@ with col_rx:
         st.subheader("Slutgiltigt mottaget meddelande/fil")
         if data.get("rx_is_file") and data.get("rx_file_data") is not None:
             if data.get("jamforelse") is not None:
-                visa_kvitto(data["jamforelse"], data.get("antal_rattade"))
+                visa_kvitto(data["jamforelse"])
             else:
                 st.success(f"**{data['rx_text']}**")
             
@@ -728,8 +702,6 @@ with col_rx:
         else:
             st.error(f"**{data['rx_text']}**")
         
-        if not data.get("rx_is_file") and data.get("antal_rattade") is not None:
-            st.caption(f"Hamming-koden rättade {data['antal_rattade']} bitfel under överföringen.")
         
         if not data.get("is_file_transfer", False):
             visa_mottagarsignal(data)

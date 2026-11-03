@@ -30,16 +30,13 @@ def minmax_utglesning(df, kolumn, max_punkter=MAX_PUNKTER):
     return df.iloc[np.unique(np.concatenate(index))]
 
 
-RATTAD_FARG = "#3b82f6"  # Blå: bitfel som Hamming-koden rättade
-KVAR_FARG = "#ef4444"    # Röd: bitfel som finns kvar efter Hamming-rättningen
-RATTAD_TEXT = "Rättat av Hamming"
-KVAR_TEXT = "Fel kvar"
+FEL_FARG = "#ef4444"  # Röd: bit som avlästes fel
 
 
 def signalgraf(df, kolumn, farg, troskel=None, troskelfarg="#ffaa00", markeringar=None):
     """
     Linjegraf (tid på x-axeln) med tröskelvärdet som en streckad horisontell linje.
-    markeringar: {"rattade": [tider], "kvar": [tider]} ritas som lodräta linjer där bitfelen uppstod.
+    markeringar: tider för bitfel, ritas som röda lodräta linjer där felen uppstod.
     """
     data = df.reset_index()
     tid = data.columns[0]
@@ -53,20 +50,13 @@ def signalgraf(df, kolumn, farg, troskel=None, troskelfarg="#ffaa00", markeringa
             color=troskelfarg, strokeDash=[6, 4]
         ).encode(y="y:Q")
         graf = graf + linje
-    if markeringar and (markeringar["rattade"] or markeringar["kvar"]):
-        fel = pd.DataFrame({
-            tid: markeringar["rattade"] + markeringar["kvar"],
-            "Bitfel": [RATTAD_TEXT] * len(markeringar["rattade"]) + [KVAR_TEXT] * len(markeringar["kvar"]),
-        })
+    if markeringar:
+        fel = pd.DataFrame({tid: list(markeringar)})
         # Pilar ovanför signalen gör felen lätta att se även där signalen är tät
         fel["y"] = float(data[kolumn].max()) + 0.6
-        farg_skala = alt.Color("Bitfel:N", scale=alt.Scale(domain=[RATTAD_TEXT, KVAR_TEXT],
-                                                            range=[RATTAD_FARG, KVAR_FARG]),
-                               legend=alt.Legend(orient="bottom", title=None))
-        streck = alt.Chart(fel).mark_rule(strokeWidth=1.5, opacity=0.85).encode(x=x, color=farg_skala)
-        pilar = alt.Chart(fel).mark_point(shape="triangle-down", size=70, filled=True, opacity=1).encode(
-            x=x, y=alt.Y("y:Q"), color=farg_skala
-        )
+        streck = alt.Chart(fel).mark_rule(strokeWidth=1.5, opacity=0.85, color=FEL_FARG).encode(x=x)
+        pilar = alt.Chart(fel).mark_point(shape="triangle-down", size=70, filled=True, opacity=1,
+                                          color=FEL_FARG).encode(x=x, y=alt.Y("y:Q"))
         graf = graf + streck + pilar
     return graf.interactive(bind_y=False)
 

@@ -6,7 +6,7 @@ import numpy as np
 import streamlit as st
 from PIL import Image, ImageFile
 
-from Signalbehandling import decode, huffman_decode, tree
+from Signalbehandling import huffman_decode, tree
 
 # ==============================================================================
 # VISNING AV SKICKADE/MOTTAGNA FILER I GRÄNSSNITTET
@@ -31,18 +31,17 @@ def dela_fildata(raw):
     return raw[:sep].decode("utf-8", errors="ignore"), raw[sep + 1:]
 
 
-def delvis_avkodning(bitar, H):
+def delvis_avkodning(bitar):
     """
-    Avkodar de bitar som hittills tagits emot, för livevisning.
+    Avkodar de nyttobitar som hittills tagits emot, för livevisning.
     Returnerar {"typ": "text", "text": ...} eller {"typ": "fil", "filnamn": ..., "data": ...}.
     """
-    n = len(bitar) // 7 * 7  # Bara hela Hamming-block
-    if n == 0:
+    if not bitar:
         return None
-    avkodat = decode(bitar[:n], H, 0, verbose=False)
-    flagga, nytta = avkodat[0], avkodat[1:]
+    flagga, nytta = bitar[0], bitar[1:]
     if flagga == 0:
-        return {"typ": "text", "text": huffman_decode(nytta, tree, allow_incomplete=True)}
+        # huffman_decode hoppar över ett ofullständigt sista tecken
+        return {"typ": "text", "text": huffman_decode(nytta, tree)}
     filnamn, data = dela_fildata(bitar_till_bytes(nytta))
     return {"typ": "fil", "filnamn": filnamn, "data": data}
 
@@ -123,7 +122,7 @@ def jamfor_filer(skickad, mottagen):
     }
 
 
-def visa_kvitto(jamforelse, antal_rattade):
+def visa_kvitto(jamforelse):
     """Kvitto som visar om filen kom fram identisk."""
     j = jamforelse
     if j["identisk"]:
@@ -133,12 +132,9 @@ def visa_kvitto(jamforelse, antal_rattade):
                  f"({j['fel_bytes']} bytes skiljer sig)")
     else:
         st.error(f"❌ **{j['fel_bytes']} av {j['skickade_bytes']} bytes skiljer sig** "
-                 f"({j['fel_bitar']} bitfel kvar efter Hamming-rättning)")
+                 f"({j['fel_bitar']} bitfel)")
 
     st.code(f"SHA-256 skickad:  {j['sha_skickad']}\nSHA-256 mottagen: {j['sha_mottagen']}", language=None)
-
-    if antal_rattade is not None:
-        st.info(f"Hamming-koden rättade **{antal_rattade}** bitfel under överföringen.")
 
 
 BMP_HUVUD = 54  # Filhuvud + informationshuvud i en BMP (före färgpaletten)

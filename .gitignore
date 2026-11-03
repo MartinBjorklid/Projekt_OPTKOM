@@ -1,2 +1,4 @@
 .DS_Store
-kalibreringsresultat
+# Felsökningsdata som skrivs vid varje mottagning och kalibrering
+senaste_mottagning.npz
+kalibrering.npz

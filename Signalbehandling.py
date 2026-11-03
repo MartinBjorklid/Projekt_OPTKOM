@@ -1,116 +1,81 @@
-import heapq
-from itertools import count
+from pathlib import Path
 import numpy as np
 
+# Träningstexten som Huffmanträdet byggs från (ligger bredvid denna fil)
+TRANINGSTEXT = Path(__file__).with_name("training-text.txt")
+
 # ============================================================
-# 1. Kod för optimering av text
+# 1. Huffmanträd från träningstext
 # ============================================================
 
-class HuffmanNode:
-    def __init__(self, frequency, char=None, left=None, right=None):
-        self.frequency = frequency
-        self.char = char
-        self.left = left
-        self.right = right
+def huffman(x):
+    with open(x, encoding="utf-8") as f: training_text = f.read()
 
-    def is_leaf(self):
-        return self.char is not None
+    ant_symboler = {}
+    for symbol in training_text:
+        ant_symboler[symbol] = ant_symboler.get(symbol,0)+1
+
+    noder = [(freq,symbol) for symbol, freq in ant_symboler.items()]
+
+    while len(noder)>1:
+        noder.sort(key=lambda nod : nod[0])
+        v_freq,v_tree = noder.pop(0)
+        h_freq,h_tree = noder.pop(0)
+        noder.append((v_freq+h_freq,(v_tree,h_tree)))
+
+    huffman_trad = noder[0][1]
+    return huffman_trad
 
 
-def build_huffman_tree(frequencies):
-
-    heap = []
-    counter = count()
-
-    # Skapa en nod för varje tecken
-    for char, frequency in frequencies.items():
-        node = HuffmanNode(frequency, char)
-
-        heapq.heappush(
-            heap,
-            (frequency, next(counter), node)
-        )
-
-    # Slå ihop de två minst frekventa noderna
-    while len(heap) > 1:
-
-        frequency1, _, left = heapq.heappop(heap)
-        frequency2, _, right = heapq.heappop(heap)
-
-        parent = HuffmanNode(
-            frequency1 + frequency2,
-            left=left,
-            right=right
-        )
-
-        heapq.heappush(
-            heap,
-            (
-                parent.frequency,
-                next(counter),
-                parent
-            )
-        )
-
-    return heap[0][2]
-
-def create_huffman_codes(node, code=None, codes=None):
-
-    if codes is None:
-        codes = {}
-    if code is None:
-        code = []
-
-    # Vi har hittat ett tecken
-    if node.is_leaf():
-        codes[node.char] = code 
-        return codes
-
-    # Vänster = 0
-    create_huffman_codes(
-        node.left,
-        code + [0],
-        codes
-    )
-
-    # Höger = 1
-    create_huffman_codes(
-        node.right,
-        code + [1],
-        codes
-    )
-
-    return codes
+def bygg_kodbok(trad,prefix="",kodbok=None):
+    if kodbok is None:
+        kodbok = {}
+    if isinstance(trad,str):
+        kodbok[trad]=prefix
+    else:
+        v,h=trad
+        bygg_kodbok(v,prefix+"0",kodbok)
+        bygg_kodbok(h,prefix+"1",kodbok)
+    return kodbok
 
 # ============================================================
 # 2. Kod för göra text till bit
 # ============================================================
-def huffman_encode(text, codes): 
-
-    result = []
-
-    for char in text:
-
-        if char not in codes:
+def huffman_encode(txt,kodbok):
+    for symbol in txt:
+        if symbol not in kodbok:
             raise ValueError(
-                f"Tecknet {repr(char)} finns inte i frekvenstabellen."
+                f"Tecknet {repr(symbol)} finns inte i träningstexten."
             )
-
-        result += codes[char]
-
-    return [int(bit) for bit in result] ##ta bort list om en lång sträng
+    # Lista med heltal 0/1 eftersom resten av kedjan (Hamming, sändning) vill ha det
+    return [int(bit) for symbol in txt for bit in kodbok[symbol]]
 
 def encode(compressed_bit):
     """
     Encodes compressed bits using hamming code (7,4) as in example
     \nadds padding to become divisible by 4
     \ncreates generator matrix G and parity check matrix H
+
+    Parameters
+    ----------
+    compressed_bit : list
+        String containing compressed binary data
+
+    Returns
+    -------
+    encoded_bits : np.ndarray
+        Binary array containing Hamming encoded bits
+    H : np.ndarray
+        Parity check matrix used when decoding
+    padding : int
+        Number of padding bits added before encoding
     """
     #Adding padding
     compressed_bit = list(compressed_bit)
     padding = 0
     remainder = len(compressed_bit)%4
     while remainder != 0:
+        #print(remainder)
         compressed_bit.append(0)
         remainder = len(compressed_bit)%4
         padding += 1
@@ -129,48 +94,53 @@ def encode(compressed_bit):
     #Encoding
     encoded_matrix = (bit_array@G)%2
     encoded_bits = encoded_matrix.flatten()
+    #Matches theory as follows (k = 4, n = 7):
+    #print(len(compressed_bit)/len(encoded_bits))
+    #print(4/7)
     return encoded_bits, H, padding
 
 
-def hamming_correct(encoded_bits, H):
+def decode(encoded_bits, H, padding):
     """
-    Corrects single bit errors in each hamming (7,4) block.
-    
-Returns the corrected codewords as a (blocks, 7) matrix and the
-    
-positions in encoded_bits of the bits that were flipped.
+    Decodes and error corrects data that has been coded with hamming code (7,4)
+    \nCalculates syndrome and corrects if wrong (1 bit only)
+    \nremoves parity bits and padding after decoding and error correction.
+
+    Parameters
+    ----------
+    encoded_bits : np.ndarray
+        Received binary data after demodulation
+    H : np.ndarray
+        Parity check matrix
+    padding : int
+        Number of padding bits added during encoding
+
+    Returns
+    -------
+    decoded_data : list
+        Integer bits with parity and padding removed, ready for huffman_decode
     """
     #r has shape (900/4,7)
     r = np.asarray(encoded_bits, dtype=int).reshape(-1,7).copy()
     #s has shape (900/4,3)
     s = ((H@r.T)%2).T
-    # Every nonzero syndrome equals exactly one column of H -> that bit is wrong.
-    # Syndromes and columns are turned into numbers 1-7 so all blocks are corrected at once.
-    weights = np.array([4, 2, 1])
-    column_of_syndrome = np.full(8, -1)
-    column_of_syndrome[H.T @ weights] = np.arange(7)
-    error_columns = column_of_syndrome[s @ weights]
-    error_blocks = np.nonzero(error_columns >= 0)[0]
-    r[error_blocks, error_columns[error_blocks]] ^= 1
-    return r, error_blocks * 7 + error_columns[error_blocks]
-
-
-def decode(encoded_bits, H, padding, verbose=True, return_corrections=False):
-    """
-    Decodes and error corrects data that has been coded with hamming code (7,4)
-    \nCalculates syndrome and corrects if wrong (1 bit only)
-    \nremoves parity bits and padding after decoding and error correction.
-    \nreturn_corrections=True also returns the number of corrected bits.
-    """
-    r, corrected_positions = hamming_correct(encoded_bits, H)
-    if verbose and len(corrected_positions) > 0:
-        print(f"Hamming: fixed {len(corrected_positions)} errors")
+    #print(s)
+    H_columns = H.T
+    error_index = []
+    for block_index,syndrome in enumerate(s):
+        if syndrome.any():
+            for seq_index,col in enumerate(H_columns):
+                if np.array_equal(syndrome,col):
+                    #print(seq_index)
+                    error_index.append([block_index,seq_index])
+                    print(f"Error fixed at row,col {block_index,seq_index}")
+                    r[block_index,seq_index] ^= 1
+                    break
     k = r[:,:4]
     decoded_data = k.ravel().tolist()
+    #print(decoded_data)
     if padding > 0:
         decoded_data = decoded_data[:-padding]
-    if return_corrections:
-        return decoded_data, len(corrected_positions)
     return decoded_data
 
 
@@ -178,84 +148,17 @@ def decode(encoded_bits, H, padding, verbose=True, return_corrections=False):
 # 3. Gör bits till text
 # ============================================================
 
-def huffman_decode(bits, tree, allow_incomplete=False):
-    """
-    allow_incomplete=True ignorerar ett ofullständigt sista tecken
-    (används när texten visas medan den fortfarande tas emot).
-    """
-
-    result = []
-    node = tree
-
-    for bit in bits:
-
-        if bit == 0:
-            node = node.left
-
-        elif bit == 1:
-            node = node.right
-
-        else:
-            raise ValueError(
-                "Bitsträngen får endast innehålla 0 och 1."
-            )
-
-        # Vi har nått ett tecken
-        if node.is_leaf():
-
-            result.append(node.char)
-
-            # Börja om från roten
-            node = tree
-
-    # Om vi inte är tillbaka vid roten är bitsträngen
-    # ofullständig
-    if node != tree and not allow_incomplete:
-        raise ValueError(
-            "Ofullständig Huffman-bitsträng."
-        )
-
-    return "".join(result)
+def huffman_decode(bitar,trad):
+    avkodad = []
+    nod = trad
+    for bit in bitar:
+        nod = nod[0] if int(bit) == 0 else  nod[1]
+        if isinstance(nod,str):
+            avkodad.append(nod)
+            nod = trad
+    return "".join(avkodad)
 
 
-# ============================================================
-# 6. SVENSK FREKVENSTABELL
-# ============================================================
+tree = huffman(TRANINGSTEXT)
 
-frequencies = {
-    " ": 18.0,
-    "e": 12.0,
-    "a": 9.3,
-    "n": 8.5,
-    "r": 8.2,
-    "t": 7.5,
-    "s": 6.5,
-    "i": 6.2,
-    "l": 5.3,
-    "o": 5.1,
-    "d": 4.5,
-    "m": 3.4,
-    "k": 3.1,
-    "g": 3.0,
-    "v": 2.4,
-    "h": 2.1,
-    "u": 2.0,
-    "b": 1.3,
-    "c": 1.7,
-    "f": 1.8,
-    "p": 1.8,
-    "å": 1.3,
-    "ä": 1.8,
-    "ö": 1.0,
-    "j": 0.7,
-    "y": 0.7,
-    "q": 0.02,
-    "w": 0.02,
-    "x": 0.1,
-    "z": 0.1,
-    "!": 0.1,
-    "?": 0.1
-}
-
-tree = build_huffman_tree(frequencies)
-codes = create_huffman_codes(tree)
+codes = bygg_kodbok(tree)
