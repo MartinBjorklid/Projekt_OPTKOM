@@ -1,104 +1,54 @@
-import heapq
-from itertools import count
+from pathlib import Path
 import numpy as np
 
+# Träningstexten som Huffmanträdet byggs från (ligger bredvid denna fil)
+TRANINGSTEXT = Path(__file__).with_name("training-text.txt")
+
 # ============================================================
-# 1. Kod för optimering av text
+# 1. Huffmanträd från träningstext
 # ============================================================
 
-class HuffmanNode:
-    def __init__(self, frequency, char=None, left=None, right=None):
-        self.frequency = frequency
-        self.char = char
-        self.left = left
-        self.right = right
+def huffman(x):
+    with open(x, encoding="utf-8") as f: training_text = f.read()
 
-    def is_leaf(self):
-        return self.char is not None
+    ant_symboler = {}
+    for symbol in training_text:
+        ant_symboler[symbol] = ant_symboler.get(symbol,0)+1
+
+    noder = [(freq,symbol) for symbol, freq in ant_symboler.items()]
+
+    while len(noder)>1:
+        noder.sort(key=lambda nod : nod[0])
+        v_freq,v_tree = noder.pop(0)
+        h_freq,h_tree = noder.pop(0)
+        noder.append((v_freq+h_freq,(v_tree,h_tree)))
+
+    huffman_trad = noder[0][1]
+    return huffman_trad
 
 
-def build_huffman_tree(frequencies):
-
-    heap = []
-    counter = count()
-
-    # Skapa en nod för varje tecken
-    for char, frequency in frequencies.items():
-        node = HuffmanNode(frequency, char)
-
-        heapq.heappush(
-            heap,
-            (frequency, next(counter), node)
-        )
-
-    # Slå ihop de två minst frekventa noderna
-    while len(heap) > 1:
-
-        frequency1, _, left = heapq.heappop(heap)
-        frequency2, _, right = heapq.heappop(heap)
-
-        parent = HuffmanNode(
-            frequency1 + frequency2,
-            left=left,
-            right=right
-        )
-
-        heapq.heappush(
-            heap,
-            (
-                parent.frequency,
-                next(counter),
-                parent
-            )
-        )
-
-    return heap[0][2]
-
-def create_huffman_codes(node, code=None, codes=None):
-
-    if codes is None:
-        codes = {}
-    if code is None:
-        code = []
-
-    # Vi har hittat ett tecken
-    if node.is_leaf():
-        codes[node.char] = code 
-        return codes
-
-    # Vänster = 0
-    create_huffman_codes(
-        node.left,
-        code + [0],
-        codes
-    )
-
-    # Höger = 1
-    create_huffman_codes(
-        node.right,
-        code + [1],
-        codes
-    )
-
-    return codes
+def bygg_kodbok(trad,prefix="",kodbok=None):
+    if kodbok is None:
+        kodbok = {}
+    if isinstance(trad,str):
+        kodbok[trad]=prefix
+    else:
+        v,h=trad
+        bygg_kodbok(v,prefix+"0",kodbok)
+        bygg_kodbok(h,prefix+"1",kodbok)
+    return kodbok
 
 # ============================================================
 # 2. Kod för göra text till bit
 # ============================================================
-def huffman_encode(text, codes): 
-
-    result = []
-
-    for char in text:
-
-        if char not in codes:
+def huffman_encode(txt,kodbok):
+    for symbol in txt:
+        if symbol not in kodbok:
             raise ValueError(
-                f"Tecknet {repr(char)} finns inte i frekvenstabellen."
+                f"Tecknet {repr(symbol)} finns inte i träningstexten."
             )
-
-        result += codes[char]
-
-    return [int(bit) for bit in result] ##ta bort list om en lång sträng
+    # Lista med heltal 0/1 eftersom resten av kedjan (Hamming, sändning) vill ha det
+    return [int(bit) for symbol in txt for bit in kodbok[symbol]]
 
 def encode(compressed_bit):
     """
@@ -198,103 +148,17 @@ def decode(encoded_bits, H, padding):
 # 3. Gör bits till text
 # ============================================================
 
-def huffman_decode(bits, tree):
-
-    result = []
-    node = tree
-
-    for bit in bits:
-
-        if bit == 0:
-            node = node.left
-
-        elif bit == 1:
-            node = node.right
-
-        else:
-            raise ValueError(
-                "Bitsträngen får endast innehålla 0 och 1."
-            )
-
-        # Vi har nått ett tecken
-        if node.is_leaf():
-
-            result.append(node.char)
-
-            # Börja om från roten
-            node = tree
-
-    # Om vi inte är tillbaka vid roten är bitsträngen
-    # ofullständig
-    if node != tree:
-        raise ValueError(
-            "Ofullständig Huffman-bitsträng."
-        )
-
-    return "".join(result)
+def huffman_decode(bitar,trad):
+    avkodad = []
+    nod = trad
+    for bit in bitar:
+        nod = nod[0] if int(bit) == 0 else  nod[1]
+        if isinstance(nod,str):
+            avkodad.append(nod)
+            nod = trad
+    return "".join(avkodad)
 
 
-# ============================================================
-# 6. SVENSK FREKVENSTABELL
-# ============================================================
+tree = huffman(TRANINGSTEXT)
 
-frequencies = {
-
-    " ": 18.0,
-
-    "e": 12.0,
-    "a": 9.3,
-    "n": 8.5,
-    "r": 8.2,
-    "t": 7.5,
-    "s": 6.5,
-    "i": 6.2,
-    "l": 5.3,
-    "o": 5.1,
-    "d": 4.5,
-    "m": 3.4,
-    "k": 3.1,
-    "g": 3.0,
-    "v": 2.4,
-    "h": 2.1,
-    "u": 2.0,
-
-    "b": 1.3,
-    "c": 1.7,
-    "f": 1.8,
-    "p": 1.8,
-
-    "å": 1.3,
-    "ä": 1.8,
-    "ö": 1.0,
-
-    "j": 0.7,
-    "y": 0.7,
-
-    "q": 0.02,
-    "w": 0.02,
-    "x": 0.1,
-    "z": 0.1,
-    "!": 0.1,
-    "?": 0.1
-}
-
-
-tree = build_huffman_tree(frequencies)
-
-codes = create_huffman_codes(tree)
-
-
-# ============================================================
-# 8. VISA BIT-TABELLEN
-# ============================================================
-
-# print("BIT-TABELL")
-# print("-------------------------")
-
-# for char, code in sorted(
-#     codes.items(),
-#     key=lambda item: (len(item[1]), item[1])
-# ):
-#     print(repr(char), "->", code)
-
+codes = bygg_kodbok(tree)
