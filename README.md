@@ -21,9 +21,15 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 2. Installera följande python-paket med hjälp av pip
   * streamlit
   * numpy
-  * nidaqmx
+  * pandas
+  * altair
+  * pillow
   * matplotlib
+  * nidaqmx (behövs endast vid skarp sändning med DAQ-kortet)
   * watchdog (ej obligatorisk, ger bättre prestanda)
+
+  >[!NOTE]
+  >pandas, altair och pillow installeras normalt automatiskt tillsammans med streamlit, men de listas här eftersom programmet använder dem direkt.
 
 >[!NOTE]
 >Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som till exempel inte kör windows. 
