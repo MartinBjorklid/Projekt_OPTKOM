@@ -32,7 +32,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
   >pandas, altair och pillow installeras normalt automatiskt tillsammans med streamlit, men de listas här eftersom programmet använder dem direkt.
 
 >[!NOTE]
->Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under debug-menyn. Detta tillåter att programmet simuleras på datorer som till exempel inte kör windows. 
+>Du kan simulera funktionaliteten av användargränssnittet utan ```nidaqmx``` genom att klicka i "Simulera Hårdvara" under inställningar. Detta tillåter att programmet simuleras på datorer som till exempel inte kör windows. 
   
   Detta görs via körning av följande kommando: ```pip install [paket]```.
   
@@ -40,33 +40,35 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
   >Om det inte funkar med ```pip install [paket]``` så får du använda ```python3 -m pip install [paket]``` och ```[paket]``` byts självklart ut mot det faktiska paketet som du ska installera, t.ex. ```numpy```
 
 ## Användning av kommunikationssystemet
-
-
+Nedan följer information om hur man använder användargränssnittet, samt en kort guide för hårdvaran.
 
 ### Introduktion användargränssnitt
+Här är en bild-sammanfattning för användargränssnittet, för en guide på hur man använder användargränssnittet, se [Procedurer](#procedurer).
 
+#### Översikt av användargränssnittet
 <p align="center">
   <img src="doc/overview.png" alt="Overview of interface">
 </p>
 
 |Nummer|Beskrivning|
 |---|---|
-|<a id="n1"></a>1|Öppnar/stänger Debug-menyn där man kan ändra inställningar och komma åt avancerade funktioner|
+|<a id="n1"></a>1|Öppnar/stänger inställningsmenyn där man kan ändra inställningar och komma åt avancerade funktioner|
 |<a id="n15"></a>15|Fält där man skriver in meddelanden som man vill ska skickas|
 |<a id="n16"></a>16|Fält för uppladdning av filer som ska skickas över den optiska länken|
 |<a id="n17"></a>17|Knapp för att öppna upp utforskaren för att välja en fil att skicka över den optiska länken|
 |<a id="n20"></a>20|Knapp för att skicka data som antingen matats in i form av fil [(16)](#n16) eller meddelande [(15)](#n15)|
 |27|Meddelande som säger att ingen data har skickats och att mottagaren inväntar en startsekvens|
 
+#### Inställningar
 <p align="center">
-  <img src="doc/debug.png" alt="A view of the debug-menu in its expanded state">
+  <img src="doc/settings.png" alt="A view of the settings-menu in its expanded state">
 </p>
 
 |Nummer|Beskrivning|
 |---|---|
-|1|Öppnar/stänger Debug-menyn där man kan ändra inställningar och komma åt avancerade funktioner|
+|1|Öppnar/stänger inställningsmenyn där man kan ändra inställningar och komma åt avancerade funktioner|
 |<a id="n2"></a>2|Fält för att ändra tiden mellan två bitar och därmed överföringshastigheten i s/bit (ändrar fält 4)|
-|<a id="n3"></a>3|Fält för att ändra hur mycket tid av "nollor" som läggs till i slutet av signalen|
+|<a id="n3"></a>3|Fält för att ändra hur länge (i sekunder) styrsignalen hålls på 0 V, alltså “nollor”, efter att den sista biten har skickats. Det ger LC-cellen och mottagaren tid att läsa in den sista biten innan sändningen avslutas. Mottagaren använder längdfältet för att veta när meddelandet är slut, så ett högre värde gör bara sändningen längre. Påverkar endast skarp sändning|
 |<a id="n4"></a>4|Fält för att ändra överföringshastigheten i bit/s (ändrar fält 2)|
 |<a id="n5"></a>5|Fält för att ändra tröskelvärdet för vad som tolkas som en etta och nolla|
 |<a id="n6"></a>6|Slider för att aktivera/avaktivera simuleringsläget som simulerar att skicka data med givna parametrar, med simuleringsläget på krävs ej biblioteket nidaqmx|
@@ -79,6 +81,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 |<a id="n13"></a>13|Fält för att skriva in manuella bitsekvenser|
 |<a id="n14"></a>14|Knapp för att skicka bitsekvensen som har skrivits in i fält [(13)](#n13)|
 
+#### Efter sändning av meddelande
 <p align="center">
   <img src="doc/sent_message.png" alt="A view of the interface after a sent message">
 </p>
@@ -99,6 +102,9 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 |<a id="n40"></a>40|Knapp för att ladda ner en logg över senast skickade data i ```.txt``` format|
 |<a id="n41"></a>41|Knapp för att ladda ner en ```.CSV``` fil som innehåller alla mätvärden från fotodetektorn samt skickad signal|
 
+För guide på hur man skickar meddelanden, se |[Skicka meddelande](#skicka-meddelande).
+
+#### Efter sändning av meddelande med fel
 <p align="center">
   <img src="doc/error_in_message.png" alt="A view of the interface after a sent message with errors">
 </p>
@@ -115,6 +121,9 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 |<a id="n38"></a>38|Röd lodrät markering som visar var i sändningen som ett bitfel uppstod|
 |39|Se [förklaring](#n39)|
 
+För guide på hur man skickar meddelanden, se |[Skicka meddelande](#skicka-meddelande).
+
+#### Efter sändning av fil
 <p align="center">
   <img src="doc/partial_file_send.png" alt="A view of the interface during the sending of a file">
 </p>
@@ -133,6 +142,9 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 |<a id="n28"></a>28|Förloppsindikator som visar förloppet på datan som mottas|
 |<a id="n29"></a>29|Vid sändning av okomprimerade bildformat som ```.bmp``` filer så visas mottagandet av bilden i realtid|
 
+För guide på hur man skickar filer, se |[Skicka fil](#skicka-fil).
+
+##### Efter sändning av fil med fel
 <p align="center">
   <img src="doc/error_in_picture.png" alt="A view of the interface after the sending of a picture that wasn't received correctly">
 </p>
@@ -151,6 +163,8 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 |<a id="n32"></a>32|Genererar SHA-256 hashes för både skickad fil och mottagen fil, om dessa stämmer överens så skedde överföringen förlustfritt|
 |<a id="n33"></a>33|Visar tydligt vilka pixlar vars data har blivit skadad under överföring i 🟥 rött samt visar även skadade paletter i 🟨 gult|
 |34|Knapp för att ladda ned den mottagna filen, eventuella bitfel inkluderas även där|
+
+För guide på hur man skickar filer, se |[Skicka fil](#skicka-fil).
 
 ### Procedurer
 >[!CAUTION]
@@ -221,7 +235,7 @@ För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (16)](#n16
 #### Simulera sändning av data
 För att simulera sändning av data om man till exempel inte har hårdvaran närvarande eller inte kan installera biblioteket ```nidaqmx``` så gör man som följande:
 
-1. Öppna [debug-menyn (1)](#n1)
+1. Öppna [inställningsmenyn (1)](#n1)
 2. Sätt igång simuleringsläget om det är av (standard är av vid start av användargränssnitt) genom att trycka på [simulerings-knappen (6)](#n6)
 
 >[!NOTE]
@@ -230,10 +244,10 @@ För att simulera sändning av data om man till exempel inte har hårdvaran när
 För att stänga av simuleringsläget så stänger du bara av simulerings-knappen.
 
 #### Ändra inställningar och parametrar för sändning
-Kalibering och ändning av inställningar görs enkelt via [debug-menyn (1)](#n1).
+Kalibering och ändning av inställningar görs enkelt via [inställningsmenyn (1)](#n1).
 
 >[!WARNING]
->Inställningarna i debug-menyn får ett visst värde från kalibreringen av en anledning att ändra standardvärdena kan orsaka problem vid skarp sändning och även ibland vid simulerad sändning, så bara för att det funkar vid simulerad sändning betyder inte att det kommer funka vid skarp sändning.
+>Inställningarna i inställningsmenyn får ett visst värde från kalibreringen av en anledning att ändra standardvärdena kan orsaka problem vid skarp sändning och även ibland vid simulerad sändning, så bara för att det funkar vid simulerad sändning betyder inte att det kommer funka vid skarp sändning.
 
 - **För att ändra sändningshastigheten**, antingen i form av bitar per sekund eller sekunder per bit, ändrar du rutan [Step Time (2)](#n2) för att ändra i sekunder per bit och rutan [Överföringshastighet (4)](#n4) om du önskar att ändra den i bitar per sekund. 
 
@@ -244,10 +258,10 @@ Kalibering och ändning av inställningar görs enkelt via [debug-menyn (1)](#n1
 - **För att simulera bitfel i mottagen signal** kan man ändra värdet på [Simulerade bitfel (7)](#n7). Att lägga till simulerade bitfel är ett bra sätt att se hur fel påverkar mottagen data men funkar endast för simulerad sändning och ett för högt värde (eller något värde över 0%, beroende på typ av data) kan lätt och leda till att datan som sänds blir oläsbar.
 
 #### Kalibrering av systemet
-För att kalibrera systemet för en viss upställning och omgivande variabler så kan kaliberingsinställningarna användas i [debug-menyn (1)](#n1).
+För att kalibrera systemet för en viss upställning och omgivande variabler så kan kaliberingsinställningarna användas i [inställningsmenyn (1)](#n1).
 
 Gör som följande:
-1. Öppna [debug-menyn (1)](#n1)
+1. Öppna [inställningsmenyn (1)](#n1)
 2. Verifiera att du är i förväntat sändningsläge [(6)](#n6), alltså det sändningsläge som ska användas för kommande sändningar.
 3. Tryck på ["Kalibera nu"-knappen (10)](#n10)
 4. Vänta på att kaliberignen genomförs, det kan ta någon minut.
@@ -261,7 +275,7 @@ För att återställa inställningarna till det senaste kalibrerade värdet så 
 >Lasern har en uppvärmningstid på 15 minuter[^2] och det rekommenderas därför inte att kalibrera eller använda systemet innan dess, då laserns egenskaper förändras något under uppvärmningen.
 
 #### Sändning av manuella bitsträngar
-Sändning av manuella bitsträngar görs via [debug-menyn (1)](#n1).
+Sändning av manuella bitsträngar görs via [inställningsmenyn (1)](#n1).
 
 1. [Kalibrera system](#kalibrering-av-systemet) om ej genomfört under aktuellt användningstillfälle
 2. Mata in bitsträngen i rutan under "Manuell Bitsändning" [(13)](#n13)

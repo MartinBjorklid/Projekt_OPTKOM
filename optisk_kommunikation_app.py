@@ -4,6 +4,7 @@ import pandas as pd
 import threading
 import time
 import datetime as dt
+import uuid
 
 # ==============================================================================
 # IMPORTERA BACKEND-FUNKTIONER
@@ -22,11 +23,54 @@ from kalibreringsdata import kor_kalibrering, las_parametrar
 # ==============================================================================
 st.set_page_config(page_title="Optisk Kommunikation", layout="wide")
 
+MAX_FILSTORLEK = 8 * 1024  # Största fil som kan skickas (bytes)
+
 # ---------------------------------------------------------
 # 1. STATE & CALLBACKS FÖR SYNKRONISERAD INMATNING
 # ---------------------------------------------------------
 if 'history' not in st.session_state:
     st.session_state.history = None
+
+if 'sessions_id' not in st.session_state:
+    st.session_state.sessions_id = uuid.uuid4().hex
+
+# Filuppladdningen töms genom att den får en ny nyckel
+if 'uppladdning_nr' not in st.session_state:
+    st.session_state.uppladdning_nr = 0
+
+def nytt_meddelande():
+    """Ett nytt meddelande ersätter en uppladdad fil."""
+    if st.session_state.meddelande:
+        st.session_state.uppladdning_nr += 1
+
+def ny_fil():
+    """En ny fil ersätter ett inskrivet meddelande."""
+    if st.session_state[f"uppladdning_{st.session_state.uppladdning_nr}"] is not None:
+        st.session_state.meddelande = ""
+
+@st.cache_resource
+def sandningsstatus():
+    """
+    Delas mellan alla sessioner. Laddas sidan om under en sändning startar en ny session,
+    och då behövs ett ställe utanför session_state där den avbrutna sändningen kan rapporteras.
+    """
+    return {"las": threading.Lock(), "pagaende": None, "avbruten": None}
+
+def avbrottsmeddelande(andel):
+    hur_langt = f" efter ungefär {andel:.0%} av sändningen" if andel > 0 else ""
+    return (f"Den senaste sändningen avbröts{hur_langt}, eftersom sidan laddades om, körningen stoppades "
+            "eller något i gränssnittet ändrades under sändningen (till exempel en inställning). "
+            "Inget resultat sparades. Skicka igen och vänta tills sändningen är klar.")
+
+# När en sändning avbryts startar Streamlit den nya körningen (eller den nya sessionen vid
+# omladdning) innan den gamla har avslutat sändningen. Vänta en kort stund på den.
+delad_status = sandningsstatus()
+vanta_till = time.monotonic() + 5.0
+while delad_status["pagaende"] is not None and time.monotonic() < vanta_till:
+    time.sleep(0.1)
+with delad_status["las"]:
+    avbruten_sandning = delad_status["avbruten"]
+    delad_status["avbruten"] = None
 
 def tillampa_kalibrering(step_time, threshold):
     """Sätter inställningarna till givna kalibrerade värden. parametrar.py ändras aldrig här."""
@@ -99,7 +143,7 @@ def visa_kalibreringsinfo(parametrar, senaste_korning):
 st.title("Optisk Kommunikation - Kontrollpanel")
 st.markdown("---")
 
-with st.expander("Debug-meny"):
+with st.expander("Inställningar"):
     st.markdown("### Justera Hårdvarutider")
     col_t1, col_t2 = st.columns(2)
     
@@ -265,11 +309,27 @@ def rita_live_mottagning(avkodare, avkoda, senast_ritat):
 # ---------------------------------------------------------
 with col_tx:
     st.header("Sändare")
-    
-    message_input = st.text_input("Mata in meddelande att skicka:", placeholder="Skriv ditt ord här...")
-    uploaded_file = st.file_uploader("Eller välj en fil att skicka (rekommenderas max 1 KB)", type=None)
-    
-    normal_send = st.button("Skicka Data", use_container_width=True)
+
+    if avbruten_sandning:
+        st.error(avbruten_sandning, icon="⚠️")
+
+    message_input = st.text_input("Mata in meddelande att skicka:", placeholder="Skriv ditt ord här...",
+                                  key="meddelande", on_change=nytt_meddelande)
+    uploaded_file = st.file_uploader("Eller välj en fil att skicka (rekommenderas max 1 KB)", type=None,
+                                     key=f"uppladdning_{st.session_state.uppladdning_nr}", on_change=ny_fil)
+
+    # Hård gräns för filstorleken. Den rekommenderade gränsen i etiketten ovan är bara en rekommendation.
+    fil_for_stor = False
+    if uploaded_file is not None:
+        # Längdfältet rymmer högst 2**LANGDFALT_BITAR - 1 nyttobitar: flagga + filnamn + 0x00 + innehåll
+        max_storlek = min(MAX_FILSTORLEK,
+                          (2 ** LANGDFALT_BITAR - 2) // 8 - len(uploaded_file.name.encode('utf-8')) - 1)
+        fil_for_stor = uploaded_file.size > max_storlek
+        if fil_for_stor:
+            st.error(f"Filen är {uploaded_file.size} bytes, men högst {max_storlek} bytes kan skickas "
+                     f"({MAX_FILSTORLEK // 1024} KB minus plats för filnamnet).")
+
+    normal_send = st.button("Skicka Data", use_container_width=True, disabled=fil_for_stor)
     
     trigger_send = False
     is_manual = False
@@ -279,6 +339,7 @@ with col_tx:
     original_text = ""
     tx_filename = None
     file_content = None
+    
 
     if normal_send:
         if uploaded_file is not None:
@@ -453,6 +514,11 @@ with col_tx:
             forvantad_tid = max(len(tx_bits_full) * step_time_input, 1e-6)
             senast_ritat = None
             tradar = [t for t in (mottagar_trad, sandar_trad) if t is not None]
+            andel = 0.0
+            avbruten = False
+            mitt_id = st.session_state.sessions_id
+            with delad_status["las"]:
+                delad_status["pagaende"] = mitt_id
             try:
                 while any(t.is_alive() for t in tradar):
                     andel = min(1.0, (time.monotonic() - t_start) / forvantad_tid)
@@ -460,6 +526,11 @@ with col_tx:
                     senast_ritat = rita_live_mottagning(delad_avkodare[0] if delad_avkodare else None,
                                                         not is_manual, senast_ritat)
                     time.sleep(0.3)
+            except BaseException:
+                # Streamlit avbryter körningen med ett undantag (StopException) när sidan laddas om,
+                # Stop trycks eller något i gränssnittet ändras
+                avbruten = True
+                raise
             finally:
                 # Laddas gränssnittet om mitt i en överföring avbryts trådarna,
                 # så att DAQ-kortet släpps och utgången nollställs
@@ -467,6 +538,11 @@ with col_tx:
                     stopp.set()
                     for t in tradar:
                         t.join(timeout=5.0)
+                with delad_status["las"]:
+                    if delad_status["pagaende"] == mitt_id:
+                        delad_status["pagaende"] = None
+                    if avbruten:
+                        delad_status["avbruten"] = avbrottsmeddelande(andel)
             tx_status.empty()
             rx_live.empty()
             
