@@ -171,7 +171,7 @@ För att starta upp hårdvaran behövs följande göras:
 1. Starta upp datorn som skall driva och kontrollera systemet
 2. Koppla in USB-sladden från NI USB-6003 till datorn
 3. Koppla in USB-sladden från Thorlabs PL201-lasern till datorn eller annan lämplig USB-strömkälla
-4. Starta PL201-Lasen genom att trycka knappen på sidan av USB-A kontakten som är inpluggad i strömkällan
+4. Starta PL201-lasen genom att trycka knappen på sidan av laserns USB-A-kontakt
 
 >[!WARNING]
 >Lasern har en uppvärmningstid på 15 minuter[^2] och det rekommenderas därför inte att kalibrera eller använda systemet innan dess, då laserns egenskaper förändras något under uppvärmningen.
