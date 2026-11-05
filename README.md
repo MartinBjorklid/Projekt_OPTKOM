@@ -5,11 +5,11 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 
 ## TODO
 - [x] Göra klart guide för interface
-- [ ] Fixa kort guide för hårdvaran
+- [x] Fixa kort guide för hårdvaran
 - [ ] Lägga till trädet för huffman-kodningen i loggen?
 - [x] Lägga till kalibering i början av procedurer samt som egen procedur
 - [x] Varför är .csv-filen på svenska?!
-- [ ] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
+- [x] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
 
 ## Installation
 1. Installera python
@@ -35,13 +35,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 
 ## Användning av kommunikationssystemet
 
-Programmet startas genom att köra:
-```streamlit run /[path to folder]/optisk_kommunikation_app.py```
 
->[!TIP]
->Om detta inte funkar testa med ```python3 -m streamlit run /[path to folder]/optisk_kommunikation_app.py```
-
-Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 
 ### Introduktion användargränssnitt
 
@@ -77,7 +71,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |<a id="n11"></a>11|Knapp för att återställa inställningarna till de som kaliberingen rekomenderar|
 |<a id="n12"></a>12|Dropdown-knapp som visar mer detaljerat resultat från senaste kalibrering|
 |<a id="n13"></a>13|Fält för att skriva in manuella bitsekvenser|
-|<a id="n14"></a>14|Knapp för att skicka bitsekvensen som har skrivits in i fält (13)|
+|<a id="n14"></a>14|Knapp för att skicka bitsekvensen som har skrivits in i fält [(13)](#n13)|
 
 <p align="center">
   <img src="doc/sent_message.png" alt="A view of the interface after a sent message">
@@ -171,7 +165,30 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 [^1]: Linköpings universitet, Institutionen för fysik, kemi och biologi (IFM),
 "Laser," internt dokument, 2020-09-28, unpublished.
 
+#### Uppstart av hårdvara
+För att starta upp hårdvaran behövs följande göras:
 
+1. Starta upp datorn som skall driva och kontrollera systemet
+2. Koppla in USB-sladden från NI USB-6003 till datorn
+3. Koppla in USB-sladden från Thorlabs PL201-lasern till datorn eller annan lämplig USB-strömkälla
+4. Starta PL201-Lasen genom att trycka knappen på sidan av USB-A kontakten som är inpluggad i strömkällan
+
+>[!WARNING]
+>Lasern har en uppvärmningstid på 15 minuter[^2] och det rekommenderas därför inte att kalibrera eller använda systemet innan dess, då laserns egenskaper förändras något under uppvärmningen.
+
+[^2]: Thorlabs, "PL201 Compact Laser Module with USB, 520 nm," Datablad
+MTN016527-S01, Rev C, jan. 2024. [Online]. Available:
+https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf.
+Accessed: 5 nov. 2026.
+
+#### Uppstart av mjukvara
+Programmet startas genom att köra:
+```streamlit run /[path to folder]/optisk_kommunikation_app.py```
+
+>[!TIP]
+>Om detta inte funkar testa med ```python3 -m streamlit run /[path to folder]/optisk_kommunikation_app.py```
+
+Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 
 #### Skicka meddelande
 För att skicka data i form av ett meddelande via [meddelande-rutan (15)](#n15) gör man på följande vis:
@@ -233,6 +250,9 @@ Gör som följande:
 Om man vill se mer detaljer kring en genomförd kaliberering så kan det ses genom att trycka på [senaste kalibering dropdownen (12)](#n12).
 
 För att återställa inställningarna till det senaste kalibrerade värdet så trycker man på [återställ kaliberade värden (11)](#n11).
+
+>[!WARNING]
+>Lasern har en uppvärmningstid på 15 minuter[^2] och det rekommenderas därför inte att kalibrera eller använda systemet innan dess, då laserns egenskaper förändras något under uppvärmningen.
 
 #### Sändning av manuella bitsträngar
 Sändning av manuella bitsträngar görs via [debug-menyn (1)](#n1).
