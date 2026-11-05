@@ -163,7 +163,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 >laserstrålen måste samtliga i rummet varnas och ges tid att titta bort/skydda ögonen.
 
 [^1]: Linköpings universitet, Institutionen för fysik, kemi och biologi (IFM),
-"Laser," internt dokument, 2020-09-28, unpublished.
+"Laser," internal document, 2020-09-28, unpublished.
 
 #### Uppstart av hårdvara
 För att starta upp hårdvaran behövs följande göras:
@@ -179,7 +179,7 @@ För att starta upp hårdvaran behövs följande göras:
 [^2]: Thorlabs, "PL201 Compact Laser Module with USB, 520 nm," Datablad
 MTN016527-S01, Rev C, jan. 2024. [Online]. Available:
 https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf.
-Accessed: 5 nov. 2026.
+Accessed: 2026-11-05.
 
 #### Uppstart av mjukvara
 Programmet startas genom att köra:
