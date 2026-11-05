@@ -200,6 +200,24 @@ with col_rx:
     st.header("Mottagare")
     rx_live = st.empty()
 
+def huffman_logg(text):
+    """
+    Huffman-kodboken och meddelandet tecken för tecken, så att bitarna i loggen
+    kan avkodas för hand. Tecknen skrivs med repr() så att mellanslag och radbrytningar syns.
+    """
+    rader = [
+        "\n--- HUFFMAN DECODING ---\n",
+        "The first received bit is the type flag (0 = text, 1 = file); the rest is Huffman coded.",
+        "Read the bits from the left until they match a code in the table, write down that symbol "
+        "and start over with the next bit (no code is the beginning of another code).\n",
+        "Sent message, symbol by symbol:",
+    ]
+    rader += [f"  {repr(tecken):<6} {codes[tecken]}" for tecken in text]
+    rader.append(f"\nHuffman code table ({len(codes)} symbols, built from training-text.txt):")
+    for tecken, kod in sorted(codes.items(), key=lambda par: (len(par[1]), par[1])):
+        rader.append(f"  {repr(tecken):<6} {kod}")
+    return "\n".join(rader) + "\n"
+
 def rita_live_mottagning(avkodare, avkoda, senast_ritat):
     """
     Visar det som hittills tagits emot i mottagarkolumnen.
@@ -584,6 +602,9 @@ with col_tx:
                     f"SHA-256 sent: {jamforelse['sha_skickad']}\n"
                     f"SHA-256 received: {jamforelse['sha_mottagen']}\n"
                 )
+            elif not is_file_transfer and not is_manual:
+                # Filer och manuella bitar Huffman-kodas inte, så kodboken behövs bara för text
+                txt_log_content += huffman_logg(original_text)
             csv_bytes = rx_df.to_csv(index=True).encode('utf-8') if rx_df is not None else None
             
             # Graferna får bara en utglesad version av signalen (min/max per segment).

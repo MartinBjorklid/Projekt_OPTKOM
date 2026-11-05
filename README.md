@@ -6,7 +6,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 ## TODO
 - [x] Göra klart guide för interface
 - [x] Fixa kort guide för hårdvaran
-- [ ] Lägga till trädet för huffman-kodningen i loggen?
+- [x] Lägga till trädet för huffman-kodningen i loggen?
 - [x] Lägga till kalibering i början av procedurer samt som egen procedur
 - [x] Varför är .csv-filen på svenska?!
 - [x] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
@@ -304,6 +304,7 @@ Filerna har följande innehåll:
 |Innehåller skickad och mottagen SHA-256 hash|🟩|🟥|
 |Visar om det uppstod fel under avkodning|🟩|🟥|
 |Innehåller vilken kalibrering som användes|🟩|🟥|
+|Innehåller Huffman-kodboken och det skickade meddelandet tecken för tecken så att mottagna bitar kan avkodas för hand (endast vid sändning av meddelande)|🟩|🟥|
 |Innehåller alla datapunkter uppfångade av mottagarens ADC med tillhörande tid|🟥|🟩|
 
 
