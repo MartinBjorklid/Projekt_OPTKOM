@@ -7,7 +7,7 @@ Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signal
 - [x] Göra klart guide för interface
 - [ ] Fixa kort guide för hårdvaran
 - [ ] Lägga till trädet för huffman-kodningen i loggen?
-- [ ] Lägga till kalibering i början av procedurer samt som egen procedur
+- [x] Lägga till kalibering i början av procedurer samt som egen procedur
 - [x] Varför är .csv-filen på svenska?!
 - [ ] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
 
@@ -55,7 +55,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |<a id="n15"></a>15|Fält där man skriver in meddelanden som man vill ska skickas|
 |<a id="n16"></a>16|Fält för uppladdning av filer som ska skickas över den optiska länken|
 |<a id="n17"></a>17|Knapp för att öppna upp utforskaren för att välja en fil att skicka över den optiska länken|
-|<a id="n20"></a>20|Knapp för att skicka data som antingen matats in i form av fil (16) eller meddelande (15)|
+|<a id="n20"></a>20|Knapp för att skicka data som antingen matats in i form av fil [(16)](#n16) eller meddelande [(15)](#n15)|
 |27|Meddelande som säger att ingen data har skickats och att mottagaren inväntar en startsekvens|
 
 <p align="center">
@@ -77,7 +77,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |<a id="n11"></a>11|Knapp för att återställa inställningarna till de som kaliberingen rekomenderar|
 |<a id="n12"></a>12|Dropdown-knapp som visar mer detaljerat resultat från senaste kalibrering|
 |<a id="n13"></a>13|Fält för att skriva in manuella bitsekvenser|
-|<a id="n14"></a>14|Knapp för att skicka bitsekvensen som har skrivits in i fält 13|
+|<a id="n14"></a>14|Knapp för att skicka bitsekvensen som har skrivits in i fält (13)|
 
 <p align="center">
   <img src="doc/sent_message.png" alt="A view of the interface after a sent message">
@@ -112,6 +112,7 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 |35|Se [förklaring](#n35)|
 |36|Se [förklaring](#n36)|
 |37|Se [förklaring](#n37)|
+|<a id="n38"></a>38|Röd lodrät markering som visar var i sändningen som ett bitfel uppstod|
 |39|Se [förklaring](#n39)|
 
 <p align="center">
@@ -176,21 +177,23 @@ Programmets användargränssnitt öppnas automatiskt i din webbläsare.
 För att skicka data i form av ett meddelande via [meddelande-rutan (15)](#n15) gör man på följande vis:
 
 1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning), se [Simulera sändning av data](#simulera-sändning-av-data)
-2. Skriv in ditt meddelande i [meddelande-rutan (15)](#n15)
-3. Skicka meddelandet genom att trycka på ["Skicka Data"-knappen (20)](#n20)
-4. Se det mottagna meddelandet under ["Slutgiltigt mottaget meddelande/fil" (30)](#n30), du kan även se de råa bitarna som mottagits under ["Mottagna bitar" (35)](#n35)
-5. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
+2. [Kalibrera system](#kalibrering-av-systemet) om ej genomfört under aktuellt användningstillfälle
+3. Skriv in ditt meddelande i [meddelande-rutan (15)](#n15)
+4. Skicka meddelandet genom att trycka på ["Skicka Data"-knappen (20)](#n20)
+5. Se det mottagna meddelandet under ["Slutgiltigt mottaget meddelande/fil" (30)](#n30), du kan även se de råa bitarna som mottagits under ["Mottagna bitar" (35)](#n35)
+6. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
 
 #### Skicka fil
 För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (16)](#n16) gör man på följande vis:
 
 1. Kontrollera att du befinner dig i rätt sändningsläge (simulering eller skarp sändning), se [Simulera sändning av data](#simulera-sändning-av-data)
-2. Ladda upp filen som du vill skicka genom att trycka på [uppladdnings-knappen (17)](#n17) och välj filen i utforskaren
-3. Skicka filen genom att trycka på ["Skicka Data"-knappen (20)](#n20)
-4. Bevaka sändnings- och mottagningsprocessen genom att titta på förloppsindikatorerna [(22)](#n22) och [(28)](#n28), om det skickas okoromprimerade filer som användargränssnittet kan hantera, såsom ```.bmp``` eller ```.txt``` filer så återskapas dom i realtid på användargränssnittet [(29)](#n29).
-5. När sändningen är klar kan du se om det har skett sändningsfel genom att jämföra [SHA-256 hasharna (32)](#n32) och se antalet bitfel i rutan ovanför [(31)](#n31)
-6. Mottagen fil kommer om möjligt [förhandsvisas (29)](#n29) och går att jämföra med [skickad fil (25)](#n25), vid sändning av t.ex. ```.bmp```-bilder så kommer även det finnas en bild som visar skillnader mellan skickad bild och mottagen bild [(33)](#n33)
-7. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
+2. [Kalibrera system](#kalibrering-av-systemet) om ej genomfört under aktuellt användningstillfälle
+3. Ladda upp filen som du vill skicka genom att trycka på [uppladdnings-knappen (17)](#n17) och välj filen i utforskaren
+4. Skicka filen genom att trycka på ["Skicka Data"-knappen (20)](#n20)
+5. Bevaka sändnings- och mottagningsprocessen genom att titta på förloppsindikatorerna [(22)](#n22) och [(28)](#n28), om det skickas okoromprimerade filer som användargränssnittet kan hantera, såsom ```.bmp``` eller ```.txt``` filer så återskapas dom i realtid på användargränssnittet [(29)](#n29).
+6. När sändningen är klar kan du se om det har skett sändningsfel genom att jämföra [SHA-256 hasharna (32)](#n32) och se antalet bitfel i rutan ovanför [(31)](#n31)
+7. Mottagen fil kommer om möjligt [förhandsvisas (29)](#n29) och går att jämföra med [skickad fil (25)](#n25), vid sändning av t.ex. ```.bmp```-bilder så kommer även det finnas en bild som visar skillnader mellan skickad bild och mottagen bild [(33)](#n33)
+8. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
 
 #### Simulera sändning av data
 För att simulera sändning av data om man till exempel inte har hårdvaran närvarande eller inte kan installera biblioteket ```nidaqmx``` så gör man som följande:
@@ -234,9 +237,10 @@ För att återställa inställningarna till det senaste kalibrerade värdet så 
 #### Sändning av manuella bitsträngar
 Sändning av manuella bitsträngar görs via [debug-menyn (1)](#n1).
 
-1. Mata in bitsträngen i rutan under "Manuell Bitsändning" [(13)](#n13)
-2. Tryck på knappen [Skicka Manuella Bitar (14)](#n14)
-3. Bitsträngen skickas nu som en ett [vanligt meddelande](#skicka-meddelande) men avkodas inte då det är en bitsträng  
+1. [Kalibrera system](#kalibrering-av-systemet) om ej genomfört under aktuellt användningstillfälle
+2. Mata in bitsträngen i rutan under "Manuell Bitsändning" [(13)](#n13)
+3. Tryck på knappen [Skicka Manuella Bitar (14)](#n14)
+4. Bitsträngen skickas nu som en ett [vanligt meddelande](#skicka-meddelande) men avkodas inte då det är en bitsträng  
    
 #### Inspektera styrsignal och mottagen signal i grafer
 För att ta en närmare titt på styrsignalen och mottagen signal så finns det varsin graf för de olika signalerna. Vid sändning av filer är denna gömd bakom en dropdown för att datan ofta är för stor för att hantera i användargränssnittet, därav rekommenderas det att [ladda ned datan](#ladda-ned-logg-och-data-från-sändning) i detta fall. Då webbläsare får svårt att visa den stora mängd data som samlas in utan att bli oanvändbar på grund av lagg så **begränsas antalet datapunkter i grafer till ca 4000 st**. Även **visningen av ren data begränsas till de första bitarna** vid längre sändningar av samma anledning.
