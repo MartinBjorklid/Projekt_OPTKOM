@@ -3,14 +3,6 @@ Detta är koden för projektet optisk kommunikation i kursen TFYY51 Ingenjörspr
 
 Syftet med koden är att generera styrsignaler till LC-cellen samt avkoda signalen med hjälp av fotodetektorn. Kommunikationen ska även genomföras på ett användarvänligt sätt.
 
-## TODO
-- [x] Göra klart guide för interface
-- [x] Fixa kort guide för hårdvaran
-- [x] Lägga till trädet för huffman-kodningen i loggen?
-- [x] Lägga till kalibering i början av procedurer samt som egen procedur
-- [x] Varför är .csv-filen på svenska?!
-- [x] Warmup för Laser..... https://media.thorlabs.com/globalassets/items/p/pl/pl2/pl201/mtn016527-s01.pdf?v=0116021148
-
 ## Installation
 1. Installera python
   - Gå in på https://www.python.org/ och installera python
@@ -202,6 +194,9 @@ För att skicka en fil av valfritt format via [fil-uppladdnings-rutan (3)](#n3) 
 6. När sändningen är klar kan du se om det har skett sändningsfel genom att jämföra [SHA-256 hasharna (34)](#n34) och se antalet bitfel i rutan ovanför
 7. Mottagen fil kommer om möjligt [förhandsvisas (31)](#n31) och går att jämföra med [skickad fil (32)](#n32), vid sändning av t.ex. ```.bmp```-bilder så kommer även det finnas en bild som visar skillnader mellan skickad bild och mottagen bild [(35)](#n35)
 8. För nedladdning och vidare behandling av datan se [Inspektera styrsignal och mottagen signal i grafer](#inspektera-styrsignal-och-mottagen-signal-i-grafer) och [Ladda ned logg och data från sändning](#ladda-ned-logg-och-data-från-sändning)
+
+>[!NOTE]
+>I dagsläget kan upp till 2^16 bitar skickas på en gång då längdinformationen som skickas över lasern representeras av 16 bits. Detta går att ändra i filen ```skicka.py```.
 
 #### Simulera sändning av data
 För att simulera sändning av data om man till exempel inte har hårdvaran närvarande eller inte kan installera biblioteket ```nidaqmx``` så gör man som följande:
