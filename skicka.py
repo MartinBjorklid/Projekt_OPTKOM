@@ -10,17 +10,18 @@ import nidaqmx.constants
 from nidaqmx.constants import AcquisitionType
 import matplotlib.pyplot as plt
 from Signalbehandling import huffman_encode, codes,tree,huffman_decode
-from parametrar import step_time
+import parametrar
+from parametrar import step_time, drivfrekvens
+# Äldre parametrar.py saknar drivamplitud; då gäller den tidigare fasta ±5 V.
+drivamplitud = getattr(parametrar, "drivamplitud", 5.0)
 
 Start_seq = [1,1,1,1,0,0]
 # Antal bitar i längdfältet efter startsekvensen. 16 bitar ger max 65535 nyttobitar.
 LANGDFALT_BITAR = 16
 # Längdfältet skickas så här många gånger; mottagaren tar majoritet per bit (udda tal).
 LANGDFALT_KOPIOR = 3
-# AO-sampel per bit. En etta drivs som +5,-5,+5,... inom biten så att LC-kristallen
-# aldrig får någon likspänning. 1 = byt polaritet för varje etta i stället.
-AO_SAMPEL_PER_BIT = 8
 AO_MAX_FREKVENS = 5000  # S/s, USB-6003
+AO_MAX_SPANNING = 10.0  # V, USB-6003 ao0 har området ±10 V
 
 
 def bygg_ram(nyttobitar):
@@ -32,12 +33,19 @@ def bygg_ram(nyttobitar):
     return Start_seq + langd * LANGDFALT_KOPIOR + list(nyttobitar)
 
 
+def ao_sampel_per_bit(step_time, drivfrekvens=drivfrekvens):
+    """AO-sampel per bit så att en etta (+5,-5,+5,... ett sampel var) ger drivfrekvensen.
+
+    Drivfrekvens = sampel_per_bit / (2 * step_time). Begränsas av AO_MAX_FREKVENS.
+    1 sampel per bit betyder att polariteten byts för varje etta i stället.
+    """
+    onskat = round(2 * drivfrekvens * step_time)
+    return max(1, min(onskat, int(AO_MAX_FREKVENS * step_time)))
+
+
 def ao_frekvens(step_time):
     """AO-samplingsfrekvens för given bittid."""
-    frekvens = AO_SAMPEL_PER_BIT / step_time
-    if frekvens > AO_MAX_FREKVENS:
-        raise ValueError(f"AO-frekvensen {frekvens:.0f} S/s är för hög; minska AO_SAMPEL_PER_BIT.")
-    return frekvens
+    return ao_sampel_per_bit(step_time) / step_time
 
 
 def faktisk_bitfrekvens(step_time, channel="Dev1/ao0"):
@@ -45,23 +53,26 @@ def faktisk_bitfrekvens(step_time, channel="Dev1/ao0"):
     närmaste möjliga, och mottagaren måste veta den exakta för att inte glida."""
     try:
         with nidaqmx.Task() as task:
-            task.ao_channels.add_ao_voltage_chan(channel, min_val=-5.0, max_val=5.0)
+            task.ao_channels.add_ao_voltage_chan(channel, min_val=-AO_MAX_SPANNING, max_val=AO_MAX_SPANNING)
             task.timing.cfg_samp_clk_timing(rate=ao_frekvens(step_time), samps_per_chan=2)
-            return float(task.timing.samp_clk_rate) / AO_SAMPEL_PER_BIT
+            return float(task.timing.samp_clk_rate) / ao_sampel_per_bit(step_time)
     except Exception:
         return 1.0 / step_time
 
 
-def till_spanningar(values):
-    """0/1 -> AO-sampel. En etta blir AO_SAMPEL_PER_BIT sampel med växlande ±5 V,
-    en nolla blir 0 V. Polariteten växlar bara på drivna sampel, så medelspänningen
-    över LC-kristallen blir noll oavsett data."""
+def till_spanningar(values, step_time=step_time, drivfrekvens=drivfrekvens,
+                    amplitud=drivamplitud):
+    """0/1 -> AO-sampel. En etta blir ao_sampel_per_bit sampel med växlande
+    ±amplitud, en nolla blir 0 V. Polariteten växlar bara på drivna sampel, så
+    medelspänningen över LC-kristallen blir noll oavsett data."""
+    if not 0 < amplitud <= AO_MAX_SPANNING:
+        raise ValueError(f"Amplituden måste vara mellan 0 och {AO_MAX_SPANNING} V.")
     voltages = []
     polaritet = 1.0
     for value in values:
-        for _ in range(AO_SAMPEL_PER_BIT):
+        for _ in range(ao_sampel_per_bit(step_time, drivfrekvens)):
             if value:
-                voltages.append(5.0 * polaritet)
+                voltages.append(amplitud * polaritet)
                 polaritet = -polaritet
             else:
                 voltages.append(0.0)
@@ -78,7 +89,7 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
     # -----------------------------
     # Konvertera 0/1 -> ±5 V-växelspänning för ettor, 0 V för nollor
     # -----------------------------
-    voltages = till_spanningar(values)
+    voltages = till_spanningar(values, step_time)
     sample_rate = ao_frekvens(step_time)
 
     # För "extra_time", lägger vi helt enkelt till nollor i slutet av listan
@@ -89,14 +100,14 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
     # Kör NI-DAQmx med hårdvarutajming
     # -----------------------------
     print(f"Skickar data med hastigheten {1.0 / step_time:g} bit/s "
-          f"({sample_rate:g} AO-sampel/s)...")
+          f"({sample_rate:g} AO-sampel/s, drivfrekvens {sample_rate / 2:g} Hz)...")
 
     try:
         with nidaqmx.Task() as task:
             task.ao_channels.add_ao_voltage_chan(
                 channel,
-                min_val=-5.0,
-                max_val=5.0
+                min_val=-AO_MAX_SPANNING,
+                max_val=AO_MAX_SPANNING
             )
 
             # Säg åt DAQ-kortet att använda sin egen klocka för att skicka värdena
@@ -122,7 +133,7 @@ def send_binary_list(values, step_time=step_time, extra_time=1.0, channel="Dev1/
         try:
             with nidaqmx.Task() as safety_task:
                 safety_task.ao_channels.add_ao_voltage_chan(
-                    channel, min_val=-5.0, max_val=5.0)
+                    channel, min_val=-AO_MAX_SPANNING, max_val=AO_MAX_SPANNING)
                 safety_task.write(0.0)
         except Exception:
             pass

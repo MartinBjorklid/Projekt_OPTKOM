@@ -1,9 +1,10 @@
 """Gemensamma länkparametrar. Importeras av skicka.py, taemot.py och program.py.
 
-Skrivs över av kalibrering.py men kan också ändras för hand.
+Skrivs av kalibrering.py (step_time, threshold) och drivfrekvens.py
+(drivfrekvens) men kan också ändras för hand.
 """
 
-# Kalibrerad 2026-11-03 12:54: vilonivå 0.325 V, högsta uppmätta 4.672 V,
-# godkända trösklar 2.560–4.200 V (marginal 0.067 V), klarade 3000 bitar.
-step_time = 1 / 270  # sekunder per bit (270 Hz)
-threshold = 3.38  # V; AI-sampel >= threshold tolkas som 1
+step_time = 1 / 270  # sekunder per bit (270 Hz); kalibrerad 2026-11-10 16:35, klarade 3000 bitar
+threshold = 3.06  # V; AI-sampel >= threshold tolkas som 1; godkänt 2.400–3.720 V, vila 0.176 V, max 4.242 V
+drivfrekvens = 1250  # Hz; växelspänningen som driver LC-kristallen under en etta; mätt 2026-11-10 16:30, LC-modulatorn klarar max 400 bit/s
+drivamplitud = 5.0  # V; toppvärdet på växelspänningen (+/- drivamplitud); mätt 2026-11-10 16:32, kristallen slår om från ca 2 V

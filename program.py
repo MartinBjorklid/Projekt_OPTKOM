@@ -1,3 +1,7 @@
+"""Ersätt innehållet i program.py med denna fil när taemot_synk.py
+har kopierats till taemot.py. skicka.py/Signalbehandling.py behålls.
+"""
+
 import threading
 import time
 
@@ -8,7 +12,7 @@ from Signalbehandling import huffman_decode, huffman_encode, codes, tree
 
 
 def main():
-    text = input("Skriv ett meddelande: ")
+    text = input("Skriv ett meddelande: ").lower()
     nyttobitar = huffman_encode(text, codes)
     ram = bygg_ram(nyttobitar)
 
@@ -37,7 +41,7 @@ def main():
 
     # Liten viloperiod för att avkodaren ska hinna se signalnivån före start.
     time.sleep(0.2)
-    print("\n[MAIN] Startar sändningen...","komprimerad längd: ",len(nyttobitar),"Okomprimerad längd: ",len(text)*8,"Kompratio: ",len(nyttobitar)/(len(text)*8))
+    print("\n[MAIN] Startar sändningen...")
     send_binary_list(ram)
     trad.join(timeout=timeout_s + 3)
     if trad.is_alive():

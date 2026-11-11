@@ -20,6 +20,7 @@ Det långa testet sparas i kalibrering.npz och kan granskas med felsok.py.
 """
 
 import datetime
+import re
 from pathlib import Path
 
 import numpy as np
@@ -27,7 +28,7 @@ import nidaqmx
 from nidaqmx.constants import AcquisitionType, TerminalConfiguration
 
 import felsok
-from skicka import bygg_ram, till_spanningar, ao_frekvens, AO_SAMPEL_PER_BIT
+from skicka import bygg_ram, till_spanningar, ao_frekvens, ao_sampel_per_bit, AO_MAX_SPANNING
 from taemot import samplingsparametrar, SynkadBitavkodare
 
 AO_KANAL = "Dev1/ao0"
@@ -76,7 +77,7 @@ def mat(step_time, nyttobitar):
     _, ai_rate = samplingsparametrar(step_time)
     ao_rate = ao_frekvens(step_time)
     vilosampel = [0.0] * int(np.ceil(VILOTID * ao_rate))
-    spanningar = vilosampel + till_spanningar(bygg_ram(nyttobitar)) + vilosampel
+    spanningar = vilosampel + till_spanningar(bygg_ram(nyttobitar), step_time) + vilosampel
     ao_tid = len(spanningar) / ao_rate
     antal_sampel = int((ao_tid + VILOTID) * ai_rate)
 
@@ -90,13 +91,13 @@ def mat(step_time, nyttobitar):
                 rate=ai_rate, sample_mode=AcquisitionType.FINITE,
                 samps_per_chan=antal_sampel,
             )
-            ao.ao_channels.add_ao_voltage_chan(AO_KANAL, min_val=-5.0, max_val=5.0)
+            ao.ao_channels.add_ao_voltage_chan(AO_KANAL, min_val=-AO_MAX_SPANNING, max_val=AO_MAX_SPANNING)
             ao.timing.cfg_samp_clk_timing(
                 rate=ao_rate, sample_mode=AcquisitionType.FINITE,
                 samps_per_chan=len(spanningar),
             )
             ai_rate = float(ai.timing.samp_clk_rate)
-            bitfrekvens = float(ao.timing.samp_clk_rate) / AO_SAMPEL_PER_BIT
+            bitfrekvens = float(ao.timing.samp_clk_rate) / ao_sampel_per_bit(step_time)
             ao.write(spanningar, auto_start=False)
 
             # AI startas först så att vilonivån alltid finns i början av inspelningen.
@@ -108,7 +109,7 @@ def mat(step_time, nyttobitar):
     finally:
         try:
             with nidaqmx.Task() as noll:
-                noll.ao_channels.add_ao_voltage_chan(AO_KANAL, min_val=-5.0, max_val=5.0)
+                noll.ao_channels.add_ao_voltage_chan(AO_KANAL, min_val=-AO_MAX_SPANNING, max_val=AO_MAX_SPANNING)
                 noll.write(0.0)
         except Exception:
             pass
@@ -197,23 +198,38 @@ def langt_test(resultat):
     return True
 
 
-def spara(resultat):
-    tid = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+def uppdatera_parametrar(**rader):
+    """Byt ut raderna `namn = ...` i parametrar.py för de givna namnen och behåll
+    övriga värden. Används även av drivfrekvens.py."""
+    befintliga = {}
+    for rad in PARAMETERFIL.read_text(encoding="utf-8").splitlines():
+        m = re.match(r"(\w+)\s*=", rad)
+        if m:
+            befintliga[m.group(1)] = rad
+    befintliga.update(rader)
     PARAMETERFIL.write_text(
         '"""Gemensamma länkparametrar. Importeras av skicka.py, taemot.py och program.py.\n'
         '\n'
-        'Skrivs över av kalibrering.py men kan också ändras för hand.\n'
+        'Skrivs av kalibrering.py (step_time, threshold) och drivfrekvens.py\n'
+        '(drivfrekvens) men kan också ändras för hand.\n'
         '"""\n'
         '\n'
-        f'# Kalibrerad {tid}: vilonivå {resultat["vilonivå"]:.3f} V, '
-        f'högsta uppmätta {resultat["hogsta"]:.3f} V,\n'
-        f'# godkända trösklar {resultat["troskel_min"]:.3f}–{resultat["troskel_max"]:.3f} V '
-        f'(marginal {resultat["marginal"]:.3f} V), klarade {LANGT_TEST_BITAR} bitar.\n'
-        f'step_time = 1 / {resultat["frekvens"]}  # sekunder per bit ({resultat["frekvens"]} Hz)\n'
-        f'threshold = {resultat["threshold"]!r}  # V; AI-sampel >= threshold tolkas som 1\n',
+        + "\n".join(befintliga.values()) + "\n",
         encoding="utf-8",
     )
     print(f"Sparat i {PARAMETERFIL}")
+
+
+def spara(resultat):
+    tid = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    f = resultat["frekvens"]
+    uppdatera_parametrar(
+        step_time=f'step_time = 1 / {f}  # sekunder per bit ({f} Hz); kalibrerad {tid}, '
+                  f'klarade {LANGT_TEST_BITAR} bitar',
+        threshold=f'threshold = {resultat["threshold"]!r}  # V; AI-sampel >= threshold tolkas '
+                  f'som 1; godkänt {resultat["troskel_min"]:.3f}–{resultat["troskel_max"]:.3f} V, '
+                  f'vila {resultat["vilonivå"]:.3f} V, max {resultat["hogsta"]:.3f} V',
+    )
 
 
 def main():
